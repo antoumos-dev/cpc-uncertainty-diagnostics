@@ -1,0 +1,104 @@
+[1;31m[error][0m a uenv is already loaded
+Running year: 2023 (task 0)
+Loading required package: sp
+Loading required package: spam
+Spam version 2.10-0 (2023-10-23) is loaded.
+Type 'help( Spam)' or 'demo( spam)' for a short introduction 
+and overview of this package.
+Help for individual functions is also obtained by adding the
+suffix '.spam' to the function name, e.g. 'help( chol.spam)'.
+
+Attaching package: ‘spam’
+
+The following objects are masked from ‘package:base’:
+
+    backsolve, forwardsolve
+
+Loading required package: viridisLite
+
+Try help(fields) to get started.
+Please note that rgdal will be retired during October 2023,
+plan transition to sf/stars/terra functions using GDAL and PROJ
+at your earliest convenience.
+See https://r-spatial.org/r/2023/05/15/evolution4.html and https://github.com/r-spatial/evolution
+rgdal: version: 1.6-7, (SVN revision 1203)
+Geospatial Data Abstraction Library extensions to R successfully loaded
+Loaded GDAL runtime: GDAL 3.8.5, released 2024/04/02
+Path to GDAL shared files: /user-environment/linux-sles15-zen3/gcc-12.3.0/gdal-3.8.5-2icxeshqziygja74ydti75cvubxiej5i/share/gdal
+ GDAL does not use iconv for recoding strings.
+GDAL binary built with GEOS: TRUE 
+Loaded PROJ runtime: Rel. 9.2.1, June 1st, 2023, [PJ_VERSION: 921]
+Path to PROJ shared files: /user-environment/linux-sles15-zen3/gcc-12.3.0/proj-9.2.1-ubhs6e47643z5wci55af7hegc2blbnn4/share/proj
+PROJ CDN enabled: TRUE
+Linking to sp version:2.1-4
+To mute warnings of possible GDAL/OSR exportToProj4() degradation,
+use options("rgdal_show_exportToProj4_warnings"="none") before loading sp or rgdal.
+
+Attaching package: ‘nowprecip’
+
+The following object is masked from ‘package:raster’:
+
+    disaggregate
+
+The following object is masked from ‘package:sp’:
+
+    disaggregate
+
+
+Attaching package: ‘ced’
+
+The following object is masked from ‘package:nowtrack’:
+
+    transform.time.stamp
+
+
+Attaching package: ‘log4r’
+
+The following object is masked from ‘package:base’:
+
+    debug
+
+Failed to query server: Transport endpoint is not connected
+
+Attaching package: ‘lubridate’
+
+The following objects are masked from ‘package:datefuns’:
+
+    day, month, year
+
+The following objects are masked from ‘package:raster’:
+
+    intersect, union
+
+The following objects are masked from ‘package:base’:
+
+    date, intersect, setdiff, union
+
+Warning message:
+In system("timedatectl", intern = TRUE) :
+  running command 'timedatectl' had status 1
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:raster’:
+
+    intersect, select, union
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+[1] "domain_done"
+[1] "js"
+[1] "here"
+Error in plot_stats_simple(res = res, year_label = year, out_dir = out_dir,  : 
+  object 'thr_label' not found
+Calls: plot_stats_simple ... plot.default -> localTitle -> title -> as.graphicsAnnot -> sprintf
+In addition: There were 12 warnings (use warnings() to see them)
+Execution halted
+srun: error: nid001229: task 0: Exited with exit code 1
+srun: Terminating StepId=4007174.0
