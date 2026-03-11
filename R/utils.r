@@ -45,7 +45,7 @@ plot_cropped_field <- function(
   cap_quant = 0.99,
   palette_end = 0.99,
   n_colors = 150,
-  title = "Cropped Field",
+  main_title = "Cropped Field",
   xlab = "Swiss easting (km)",
   ylab = "Swiss northing (km)",
   output_file = NULL
@@ -117,7 +117,7 @@ plot_cropped_field <- function(
        asp  = 1,
        xlab = xlab,
        ylab = ylab,
-       main = title,
+       main = main_title,
        xaxs = "i",
        yaxs = "i")
 
@@ -129,7 +129,6 @@ plot_cropped_field <- function(
         useRaster = TRUE,
         col      = pal,
         zlim     = c(vmin, vmax))
-
   # ---------------------------------------------------------
   # Legend
   # ---------------------------------------------------------
