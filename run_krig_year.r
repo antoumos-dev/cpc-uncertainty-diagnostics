@@ -167,7 +167,7 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
   }
 
   list(
-    threshold = min_threshold,
+    min_threshold = min_threshold,
     max_threshold = max_threshold,
     rel_uncert_method = rel_uncert_method,
     annual = list(
@@ -195,17 +195,8 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
                               cap_quant_relunc = 0.98) {
 
   mode <- match.arg(mode)
- # thr_txt <- gsub("\\.", "p", sprintf("%.2f", res$threshold))
-  
-  thr_txt <- if (is.infinite(res$max_threshold)) {
-  gsub("\\.", "p", sprintf("%.2f", res$min_threshold))
-} else {
-  paste0(
-    gsub("\\.", "p", sprintf("%.2f", res$min_threshold)),
-    "_to_",
-    gsub("\\.", "p", sprintf("%.2f", res$max_threshold))
-  )
-}
+  thr_txt <- gsub("\\.", "p", sprintf("%.2f", res$min_threshold))
+ 
   # helper to avoid repeating plot calls
   plot_one <- function(Z, fname, ttl, capq = cap_quant, pal_end = palette_end) {
     if (is.null(Z) || length(dim(Z)) != 2) return(invisible(FALSE))
@@ -256,99 +247,61 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
     )
   }
 }
-  # Annual
-  # plot_relunc_variants(res$annual, season_name = NULL)
+#Annual
+  plot_relunc_variants(res$annual, season_name = NULL)
 
-  # # Seasonal
-  # for (s in names(res$seasonal)) {
-  #   plot_relunc_variants(res$seasonal[[s]], season_name = s)
-  # }
+  # Seasonal
+  for (s in names(res$seasonal)) {
+    plot_relunc_variants(res$seasonal[[s]], season_name = s)
+  }
 
-  # # If user asked ONLY relunc, stop here
-  # if (mode == "relunc") return(invisible(TRUE))
+  # If user asked ONLY relunc, stop here
+  if (mode == "relunc") return(invisible(TRUE))
 
   # -----------------------------
   # Existing plots: only when mode == "all"
   # -----------------------------
 
   # Annual
-  # plot_one(res$annual$mean_mu,
-  #          sprintf("ANNUAL_MU_%s_thr_%s.png", year_label, thr_txt),
-  #          sprintf("%s annual kriging mean (μ), thr=%.2f", year_label, res$threshold))
+  plot_one(res$annual$mean_mu,
+           sprintf("ANNUAL_MU_%s_thr_%s.png", year_label, thr_txt),
+           sprintf("%s annual kriging mean (μ), thr=%.2f", year_label, res$min_threshold))
 
-  # plot_one(res$annual$mean_iqr,
-  #          sprintf("ANNUAL_IQR_%s_thr_%s.png", year_label, thr_txt),
-  #          sprintf("%s annual IQR(90-10), thr=%.2f", year_label, res$threshold))
+  plot_one(res$annual$mean_iqr,
+           sprintf("ANNUAL_IQR_%s_thr_%s.png", year_label, thr_txt),
+           sprintf("%s annual IQR(90-10), thr=%.2f", year_label, res$min_threshold))
 
-  # plot_one(res$annual$accum_mu,
-  #          sprintf("ANNUAL_ACCUM_%s_thr_%s.png", year_label, thr_txt),
-  #          sprintf("%s annual accumulation (mm), thr=%.2f", year_label, res$threshold))
+  plot_one(res$annual$accum_mu,
+           sprintf("ANNUAL_ACCUM_%s_thr_%s.png", year_label, thr_txt),
+           sprintf("%s annual accumulation (mm), thr=%.2f", year_label, res$min_threshold))
 
-title_txt <- if (is.infinite(res$max_threshold)) {
-  sprintf("%s annual wet hours (>%.2f)", year_label, res$min_threshold)
-} else {
-  sprintf("%s annual wet hours (%.2f–%.2f)",
-          year_label, res$min_threshold, res$max_threshold)
-}
-
-  # plot_one(res$annual$wet_hours,
-  #          sprintf("ANNUAL_WET_HOURS_%s_thr_%s.png", year_label, thr_txt),
-  #          sprintf("%s annual wet hours (>%.2f)", year_label, res$threshold))
-
-plot_one(
-  res$annual$wet_hours,
-  sprintf("ANNUAL_WET_HOURS_%s_thr_%s.png", year_label, thr_txt),
-  title_txt
-)
+  plot_one(res$annual$wet_hours,
+           sprintf("ANNUAL_WET_HOURS_%s_thr_%s.png", year_label, thr_txt),
+           sprintf("%s annual wet hours (>%.2f)", year_label, res$min_threshold))
 
   # Seasonal
   for (s in names(res$seasonal)) {
 
-    season_title_txt <- if (is.infinite(res$max_threshold)) {
-    sprintf("%s %s wet hours (>%.2f)", year_label, s, res$min_threshold)
-    } else {
-    sprintf("%s %s wet hours (%.2f-%.2f)",
-            year_label, s, res$min_threshold, res$max_threshold)
-    }
+    plot_one(res$seasonal[[s]]$mean_mu,
+             sprintf("SEASON_%s_MU_%s_thr_%s.png", s, year_label, thr_txt),
+             sprintf("%s %s kriging mean (μ), thr=%.2f", year_label, s, res$min_threshold))
 
-    # plot_one(res$seasonal[[s]]$mean_mu,
-    #          sprintf("SEASON_%s_MU_%s_thr_%s.png", s, year_label, thr_txt),
-    #          sprintf("%s %s kriging mean (μ), thr=%.2f", year_label, s, res$threshold))
+    plot_one(res$seasonal[[s]]$mean_iqr,
+             sprintf("SEASON_%s_IQR_%s_thr_%s.png", s, year_label, thr_txt),
+             sprintf("%s %s IQR(90-10), thr=%.2f", year_label, s, res$min_threshold))
 
-    # plot_one(res$seasonal[[s]]$mean_iqr,
-    #          sprintf("SEASON_%s_IQR_%s_thr_%s.png", s, year_label, thr_txt),
-    #          sprintf("%s %s IQR(90-10), thr=%.2f", year_label, s, res$threshold))
-
-    # plot_one(res$seasonal[[s]]$accum_mu,
-    #          sprintf("SEASON_%s_ACCUM_%s_thr_%s.png", s, year_label, thr_txt),
-    #          sprintf("%s %s accumulation (mm), thr=%.2f", year_label, s, res$threshold))
-    plot_one(
-    res$seasonal[[s]]$wet_hours,
-    sprintf("SEASON_%s_WET_HOURS_%s_thr_%s.png", s, year_label, thr_txt),
-    sprintf("%s %s wet hours (%s)", year_label, s, thr_label)
-  )
-  
+    plot_one(res$seasonal[[s]]$accum_mu,
+             sprintf("SEASON_%s_ACCUM_%s_thr_%s.png", s, year_label, thr_txt),
+             sprintf("%s %s accumulation (mm), thr=%.2f", year_label, s, res$min_threshold))
+    plot_one(res$seasonal[[s]]$wet_hours,
+            sprintf("SEASON_%s_WET_HOURS_%s_thr_%s.png", s, year_label, thr_txt),
+            sprintf("%s %s wet hours (>%.2f)", year_label, s, res$min_threshold) )
+  }
 
   invisible(TRUE)
 }
 
 
-
-res <- compute_year_threshold_stats_simple(
-  rda_file = rda_file,
-  min_threshold = 0.1,
-  max_threshold = 0.5,
-  mu_min = mu_min
-)
-
-plot_stats_simple(
-    res = res,
-    year_label = year,
-    out_dir = out_dir,
-    xlim = xlim,
-    ylim = ylim,
-    mode = mode
-  )
 
 # Interactive run config
 # -----------------------------
@@ -363,31 +316,31 @@ thresholds <- c(1.0)  # can be c(0.1, 0.5, 1.0) etc
 # # -----------------------------
 # # RUN
 # # -----------------------------
-# stopifnot(file.exists(rda_file))
+stopifnot(file.exists(rda_file))
 
-# message("Running year=", year, " file=", rda_file)
-# message("Mode=", mode, " | mu_min=", mu_min)
-# message("Plots -> ", normalizePath(out_dir, mustWork = FALSE))
+message("Running year=", year, " file=", rda_file)
+message("Mode=", mode, " | mu_min=", mu_min)
+message("Plots -> ", normalizePath(out_dir, mustWork = FALSE))
 
-# for (thr in thresholds) {
-#   message("Threshold: ", thr)
+for (thr in thresholds) {
+  message("Threshold: ", thr)
 
-#   res <- compute_year_threshold_stats_simple(
-#     rda_file = rda_file,
-#     threshold = thr,
-#     mu_min = mu_min,
-#     rel_uncert_method = "B_median"   # or "A"
-#   )
+  res <- compute_year_threshold_stats_simple(
+    rda_file = rda_file,
+    min_threshold = thr,
+    mu_min = mu_min,
+    rel_uncert_method = "A"   # or "A"
+  )
 
-#   plot_stats_simple(
-#     res = res,
-#     year_label = year,
-#     out_dir = out_dir,
-#     xlim = xlim,
-#     ylim = ylim,
-#     mode = mode
-#   )
-# }
+  plot_stats_simple(
+    res = res,
+    year_label = year,
+    out_dir = out_dir,
+    xlim = xlim,
+    ylim = ylim,
+    mode = mode
+  )
+}
 
 message("Done.")
 
