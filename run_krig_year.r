@@ -225,7 +225,7 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
     #A         = "rel_uncert_A",
     #B_median  = "rel_uncert_B_median",
     B_IQR     = "iqr_relative_uncertainty"
-    # you can add B_weighted etc later
+    # B_weighted later
   )
 
   for (lab in names(variants)) {
