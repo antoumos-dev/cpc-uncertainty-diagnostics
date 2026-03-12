@@ -35,44 +35,43 @@ if (length(args) < 1) stop("Provide a year, e.g. Rscript run_year_thresholds.R 2
 
 year <- as.character(args[1])
 
-# Optional 2nd argument: mode
-# "all"    = run your existing plots
+# "all"    = run  existing plots
 # "relunc" = compute/plot only relative uncertainty (IQR/μ)
 mode <- if (length(args) >= 2) tolower(args[2]) else "all"
 if (!mode %in% c("all", "relunc")) stop("mode must be 'all' or 'relunc'")
 
-# Optional 3rd argument: minimum μ to avoid exploding ratios (default sensible-ish)
+# minimum μ to avoid exploding ratios
 mu_min <- if (length(args) >= 3) as.numeric(args[3]) else 0.05
 if (!is.finite(mu_min) || mu_min < 0) stop("mu_min must be a non-negative number")
 
-# Input file
-rda_file <- sprintf(
-  "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda",
-  year
-)
+
+project_root <- "/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats"
+data_root    <- "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project"
+lib_root     <- "/store_new/mch/msclim/antoumos/R/lib"
 
 thresholds <- c(0.1, 0.5, 1, 2)
-
-# Plot domain (your Swiss crop window)
-xlim <- c(480, 840)
+xlim <- c(480, 840) # Swiss crop window
 ylim <- c(60, 300)
 
+base_out_dir <- file.path(project_root, "out_plots")
+utils_file   <- file.path(project_root, "R", "utils.r")
 
-base_out_dir <- "/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/out_plots"
-# Output folder for plots (separate folder per run)
-out_dir <- file.path(base_out_dir,
-                     paste0("year_", year))
+rda_file <- file.path(
+  data_root,
+  sprintf("precip_transformed_results_new_%s.rda", year)
+)
+
+out_dir <- file.path(base_out_dir, paste0("year_", year))
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-.libPaths("/store_new/mch/msclim/antoumos/R/lib")
+
+.libPaths(lib_root)
+source(utils_file) # helpers function
 
 suppressPackageStartupMessages({
   library(matrixStats)
   library(abind)
 })
-
-# Load helper functions
-source("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/R/utils.r")
 
 #-------------------------------
 # Compute stats for one threshold
@@ -155,6 +154,13 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
     method    = "median",
     min_hours = 20
   )
+# Option B IQR of hourly relative uncertainty
+  s_rel_B_iqr <- aggregate_rel_uncert_iqr(
+    mu_list   = s_mu_list,
+    iqr_list  = s_iqr_list,
+    mu_min    = mu_min,
+    min_hours = 10
+  )
     
     seasonal[[s]] <- list(
       mean_mu    = s_mean_mu,
@@ -162,7 +168,8 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
       wet_hours  = s_wet_hours,
       mean_iqr   = s_mean_iqr,
       rel_uncert_A = s_rel_A,
-      rel_uncert_B_median = s_rel_Bmed
+      rel_uncert_B_median = s_rel_Bmed,
+      iqr_relative_uncertainty = s_rel_B_iqr
     )
   }
 
@@ -215,8 +222,8 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
   plot_relunc_variants <- function(obj, season_name = NULL) {
   # obj is either res$annual or res$seasonal[[s]]
   variants <- c(
-    A         = "rel_uncert_A",
-    B_median  = "rel_uncert_B_median",
+    #A         = "rel_uncert_A",
+    #B_median  = "rel_uncert_B_median",
     B_IQR     = "iqr_relative_uncertainty"
     # you can add B_weighted etc later
   )
@@ -230,11 +237,11 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
      
     ttl <- if (lab == "B_IQR") {
       sprintf("%s%s IQR of relative uncertainty, thr=%.2f",
-              year_label, ttl_season, res$threshold)
+              year_label, ttl_season, res$min_threshold)
     }
     else {
       sprintf("%s%s relative uncertainty (%s) (IQR/\u03bc), thr=%.2f",
-              year_label, ttl_season, lab, res$threshold)
+              year_label, ttl_season, lab, res$min_threshold)
     }
   
   fname <- sprintf("%sRELUNC_%s_%s_thr_%s.png", s_tag, lab, year_label, thr_txt)
@@ -301,8 +308,6 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
   invisible(TRUE)
 }
 
-
-
 # Interactive run config
 # -----------------------------
 
@@ -310,7 +315,7 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
 mode   <- "relunc"     # "all" or "relunc"
 mu_min <- 0.1       # mask for tiny mu in relunc
 
-thresholds <- c(1.0)  # can be c(0.1, 0.5, 1.0) etc
+thresholds <- c(0.1)  # can be c(0.1, 0.5, 1.0) etc
 
 
 # # -----------------------------
@@ -329,7 +334,7 @@ for (thr in thresholds) {
     rda_file = rda_file,
     min_threshold = thr,
     mu_min = mu_min,
-    rel_uncert_method = "A"   # or "A"
+    rel_uncert_method = "B_IQR"   # or "A"
   )
 
   plot_stats_simple(
