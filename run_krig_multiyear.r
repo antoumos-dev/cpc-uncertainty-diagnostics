@@ -28,7 +28,7 @@ library(dplyr)
 args <- commandArgs(trailingOnly = TRUE)
 
 if (length(args) < 2) {
-  stop("Usage: Rscript run_interannual.R <start_year> <end_year> [thresholds] [out_dir]")
+stop("Usage: Rscript run_interannual.R <start_year> <end_year> [threshold_bands] [out_dir]")
 }
 
 start_year <- as.integer(args[1])
@@ -39,77 +39,99 @@ if (!is.finite(start_year) || !is.finite(end_year))
 
 years <- seq(start_year, end_year)
 
-# Optional thresholds (comma separated like 0.1,1,5)
-thresholds <- if (length(args) >= 3) {
-  as.numeric(strsplit(args[3], ",")[[1]])
+# thresholds bands (comma separated like 0.01-0.1,0.1-0.5)
+threshold_bands <- if (length(args) >= 3) {
+  band_strings <- strsplit(args[3], ",")[[1]]
+
+  lapply(band_strings, function(x) {
+    vals <- as.numeric(strsplit(x, "-")[[1]])
+    if (length(vals) != 2 || any(!is.finite(vals))) {
+      stop("Invalid threshold band: ", x,
+           ". Use format like 0.01-0.1,0.1-0.5")
+    }
+    if (vals[1] >= vals[2]) {
+      stop("Threshold band must satisfy min < max: ", x)
+    }
+    vals
+  })
 } else {
-  c(0.1)
+  list(c(0.1, Inf))
 }
 
-if (any(!is.finite(thresholds)))
-  stop("Invalid thresholds")
+# Optional
+band_labels <- vapply(
+  threshold_bands,
+  function(x) paste0(x[1], "-", x[2]),
+  character(1)
+)
 
 # Optional output directory
 out_dir <- if (length(args) >= 4) {
   args[4]
 } else {
-  sprintf("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/out_plots/interannual_%d_%d/",
+  sprintf("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/out_plots/interannual_bands_%d_%d/",
           start_year, end_year)
 }
 
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 message("Years: ", paste(years, collapse = ", "))
-message("Thresholds: ", paste(thresholds, collapse = ", "))
+message("Threshold bands: ", paste(band_labels, collapse = ", "))
 message("Output dir: ", normalizePath(out_dir, mustWork = FALSE))
-
 
 # Load helper functions
 source("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/R/utils.r")
 
-res_all <- compute_interannual_stats(
-  years = years,
-  thresholds = thresholds
-)
+compute_interannual_stats <- function(
+  years,
+  threshold_bands,
+  rda_pattern = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda"
+) {
+  # Name each band like "0.01_0.1"
+  band_names <- vapply(
+    threshold_bands,
+    function(x) paste0(x[1], "_", x[2]),
+    character(1)
+  )
 
-#for (thr in names(res_all)) {
- # plot_interannual_products(res_all[[thr]], out_dir)
-#plot_interannual_sd_products(res_all[[thr]], out_dir)
-#}
+  out <- vector("list", length(threshold_bands))
+  names(out) <- band_names
 
+  for (i in seq_along(threshold_bands)) {
+    band <- threshold_bands[[i]]
+    min_threshold <- band[1]
+    max_threshold <- band[2]
 
-out_dir <- ("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/out_plots/interannual_2016_2025/")
+    message("=== Threshold band ", min_threshold, " to ", max_threshold, " ===")
 
-compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda") {
-
-  out <- vector("list", length(thresholds))
-  names(out) <- as.character(thresholds)
-
-  for (thr in thresholds) {
-    message("=== Threshold ", thr, " ===")
     variance_ref_list <- NULL
 
-    # We will initialize these after first successful year (when we know matrix dims)
+    # Initialize after first successful year
     acc_annual <- NULL
-    acc_annual_sd <- NULL
     acc_season <- NULL
-    acc_season_sd <- NULL
 
     for (yr in years) {
       rda_file <- sprintf(rda_pattern, yr)
+
       if (!file.exists(rda_file)) {
         warning("Missing: ", rda_file)
         next
       }
 
       message(" Year ", yr)
-      res <- compute_year_threshold_stats_simple(rda_file, threshold = thr,rel_uncert_method = "A")
-      #years_done <- c(years_done, yr)
 
-      # keep plotting coords from first valid year
-      if (is.null(variance_ref_list)) variance_ref_list <- res$variance_ref_list
+      res <- compute_year_threshold_stats_simple(
+        rda_file = rda_file,
+        min_threshold = min_threshold,
+        max_threshold = max_threshold
+      )
 
-      # initialize accumulators from first year's matrix shapes
+      # Keep plotting coords from first valid year
+      if (is.null(variance_ref_list)) {
+        variance_ref_list <- res$variance_ref_list
+      }
+
+      # Initialize accumulators from first valid year
       if (is.null(acc_annual)) {
         acc_annual <- list(
           mean_mu   = acc_init(res$annual$mean_mu),
@@ -117,65 +139,42 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
           accum_mu  = acc_init(res$annual$accum_mu),
           wet_hours = acc_init(res$annual$wet_hours)
         )
-        #SD accumulators (Welford)
-        acc_annual_sd <- list(
-        mean_mu   = acc_sd_init(res$annual$mean_mu),
-        mean_iqr  = acc_sd_init(res$annual$mean_iqr),
-        accum_mu  = acc_sd_init(res$annual$accum_mu),
-        wet_hours = acc_sd_init(res$annual$wet_hours)
+
+        acc_season <- setNames(
+          vector("list", length(names(res$seasonal))),
+          names(res$seasonal)
         )
-        acc_season <- setNames(vector("list", length(names(res$seasonal))), names(res$seasonal))
-        acc_season_sd <- setNames(vector("list", length(names(res$seasonal))), names(res$seasonal))
+
         for (s in names(res$seasonal)) {
           acc_season[[s]] <- list(
-          mean_mu   = acc_init(res$seasonal[[s]]$mean_mu),
-          mean_iqr  = acc_init(res$seasonal[[s]]$mean_iqr),
-          accum_mu  = acc_init(res$seasonal[[s]]$accum_mu),
-          wet_hours = acc_init(res$seasonal[[s]]$wet_hours)
+            mean_mu   = acc_init(res$seasonal[[s]]$mean_mu),
+            mean_iqr  = acc_init(res$seasonal[[s]]$mean_iqr),
+            accum_mu  = acc_init(res$seasonal[[s]]$accum_mu),
+            wet_hours = acc_init(res$seasonal[[s]]$wet_hours)
           )
-          acc_season_sd[[s]] <- list(
-          mean_mu   = acc_sd_init(res$seasonal[[s]]$mean_mu),
-          mean_iqr  = acc_sd_init(res$seasonal[[s]]$mean_iqr),
-          accum_mu  = acc_sd_init(res$seasonal[[s]]$accum_mu),
-          wet_hours = acc_sd_init(res$seasonal[[s]]$wet_hours)
-        )
+        }
       }
-    }
 
-      # annual add
+      # Annual add
       acc_annual$mean_mu   <- acc_add(acc_annual$mean_mu,   res$annual$mean_mu)
       acc_annual$mean_iqr  <- acc_add(acc_annual$mean_iqr,  res$annual$mean_iqr)
       acc_annual$accum_mu  <- acc_add(acc_annual$accum_mu,  res$annual$accum_mu)
       acc_annual$wet_hours <- acc_add(acc_annual$wet_hours, res$annual$wet_hours)
 
-      # seasonal add
+      # Seasonal add
       for (s in names(res$seasonal)) {
         acc_season[[s]]$mean_mu   <- acc_add(acc_season[[s]]$mean_mu,   res$seasonal[[s]]$mean_mu)
         acc_season[[s]]$mean_iqr  <- acc_add(acc_season[[s]]$mean_iqr,  res$seasonal[[s]]$mean_iqr)
         acc_season[[s]]$accum_mu  <- acc_add(acc_season[[s]]$accum_mu,  res$seasonal[[s]]$accum_mu)
         acc_season[[s]]$wet_hours <- acc_add(acc_season[[s]]$wet_hours, res$seasonal[[s]]$wet_hours)
+      }
     }
-    
-      # SD add
-      # annual
-      acc_annual_sd$mean_mu   <- acc_sd_add(acc_annual_sd$mean_mu,   res$annual$mean_mu)
-      acc_annual_sd$mean_iqr  <- acc_sd_add(acc_annual_sd$mean_iqr,  res$annual$mean_iqr)
-      acc_annual_sd$accum_mu  <- acc_sd_add(acc_annual_sd$accum_mu,  res$annual$accum_mu)
-      acc_annual_sd$wet_hours <- acc_sd_add(acc_annual_sd$wet_hours, res$annual$wet_hours)
 
-      # seasonal
-      for (s in names(res$seasonal)) {
-      acc_season_sd[[s]]$mean_mu   <- acc_sd_add(acc_season_sd[[s]]$mean_mu,   res$seasonal[[s]]$mean_mu)
-      acc_season_sd[[s]]$mean_iqr  <- acc_sd_add(acc_season_sd[[s]]$mean_iqr,  res$seasonal[[s]]$mean_iqr)
-      acc_season_sd[[s]]$accum_mu  <- acc_sd_add(acc_season_sd[[s]]$accum_mu,  res$seasonal[[s]]$accum_mu)
-      acc_season_sd[[s]]$wet_hours <- acc_sd_add(acc_season_sd[[s]]$wet_hours, res$seasonal[[s]]$wet_hours)
-    }
-  }
-    # finalize means
+    # Finalize means
     if (is.null(acc_annual)) {
-      warning("No valid years processed for threshold ", thr)
+      warning("No valid years processed for threshold band ", min_threshold, " to ", max_threshold)
       next
-  }
+    }
 
     annual_mean <- list(
       mean_mu   = acc_mean(acc_annual$mean_mu),
@@ -192,170 +191,113 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
         wet_hours = acc_mean(a$wet_hours)
       )
     })
-    # finalize SD (new)
-    annual_sd <- list(
-      mean_mu   = acc_sd_finalize(acc_annual_sd$mean_mu),
-      mean_iqr  = acc_sd_finalize(acc_annual_sd$mean_iqr),
-      accum_mu  = acc_sd_finalize(acc_annual_sd$accum_mu),
-      wet_hours = acc_sd_finalize(acc_annual_sd$wet_hours)
-    )
 
-    seasonal_sd <- lapply(acc_season_sd, function(a) {
-      list(
-        mean_mu   = acc_sd_finalize(a$mean_mu),
-        mean_iqr  = acc_sd_finalize(a$mean_iqr),
-        accum_mu  = acc_sd_finalize(a$accum_mu),
-        wet_hours = acc_sd_finalize(a$wet_hours)
-      )
-    })
-
-      out[[as.character(thr)]] <- list(
-      threshold = thr,
+    out[[i]] <- list(
+      min_threshold = min_threshold,
+      max_threshold = max_threshold,
       years = years,
       interannual_mean = annual_mean,
       interseasonal_mean = seasonal_mean,
-      interannual_sd = annual_sd,
-      interseasonal_sd = seasonal_sd,
       variance_ref_list = variance_ref_list
     )
-}
+  }
+
   out
 }
 
 
-plot_interannual_products <- function(res_thr, out_dir,
-                                      xlim = c(480,840), ylim = c(60,300),
-                                      cap_quant = 0.99, palette_end = 0.99) {
+message("Start computation")
+
+res_all <- compute_interannual_stats(
+  years = years,
+  threshold_bands = threshold_bands
+)
+
+plot_interannual_products <- function(
+  res_thr, out_dir,
+  xlim = c(480, 840), ylim = c(60, 300),
+  cap_quant = 0.99, palette_end = 0.99
+) {
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  thr_txt <- gsub("\\.", "p", sprintf("%.2f", res_thr$threshold))
 
-  # annual
-  plot_cropped_field(res_thr$interannual$mean_mu,  res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual mean μ (years %s–%s), thr=%.2f",
-                                     min(res_thr$years), max(res_thr$years), res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_MU_thr_%s.png", thr_txt)))
+  min_thr <- res_thr$min_threshold
+  max_thr <- res_thr$max_threshold
 
-  plot_cropped_field(res_thr$interannual$mean_iqr, res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual mean IQR(90-10), thr=%.2f", res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_IQR_thr_%s.png", thr_txt)))
+  band_txt <- paste0(
+    gsub("\\.", "p", sprintf("%.2f", min_thr)),
+    "_to_",
+    gsub("\\.", "p", sprintf("%.2f", max_thr))
+  )
 
-  plot_cropped_field(res_thr$interannual$accum_mu, res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual mean accumulation (mm), thr=%.2f", res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_ACCUM_thr_%s.png", thr_txt)))
+  band_label <- sprintf("(%.2f, %.2f]", min_thr, max_thr)
 
-  plot_cropped_field(res_thr$interannual$wet_hours, res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual mean wet hours, thr=%.2f", res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_WETHOURS_thr_%s.png", thr_txt)))
+  # annual IQR
+  plot_cropped_field(
+    res_thr$interannual_mean$mean_iqr,
+    res_thr$variance_ref_list,
+    xlim, ylim,
+    main_title = sprintf(
+      "10-year mean IQR (years %s-%s), band %s",
+      min(res_thr$years), max(res_thr$years), band_label
+    ),
+    cap_quant = cap_quant,
+    palette_end = palette_end,
+    output_file = file.path(out_dir, sprintf("10-year_IQR_band_%s.png", band_txt))
+  )
+
+  # annual wet hours
+  plot_cropped_field(
+    res_thr$interannual_mean$wet_hours,
+    res_thr$variance_ref_list,
+    xlim, ylim,
+    main_title = sprintf(
+      "10-year mean wet hours (years %s-%s), band %s",
+      min(res_thr$years), max(res_thr$years), band_label
+    ),
+    cap_quant = cap_quant,
+    palette_end = palette_end,
+    output_file = file.path(out_dir, sprintf("10-year_WETHOURS_band_%s.png", band_txt))
+  )
 
   # seasonal
-  for (s in names(res_thr$interseasonal)) {
-    ss <- res_thr$interseasonal[[s]]
+  for (s in names(res_thr$interseasonal_mean)) {
+    ss <- res_thr$interseasonal_mean[[s]]
 
-    plot_cropped_field(ss$mean_mu,  res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s mean μ across years, thr=%.2f", s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_MU_thr_%s.png", s, thr_txt)))
+    plot_cropped_field(
+      ss$mean_iqr,
+      res_thr$variance_ref_list,
+      xlim, ylim,
+      main_title = sprintf("%s mean IQR across 2016-2025, band %s", s, band_label),
+      cap_quant = cap_quant,
+      palette_end = palette_end,
+      output_file = file.path(out_dir, sprintf("10_year_%s_IQR_band_%s.png", s, band_txt))
+    )
 
-    plot_cropped_field(ss$mean_iqr, res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s mean IQR across years, thr=%.2f", s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_IQR_thr_%s.png", s, thr_txt)))
-
-    plot_cropped_field(ss$accum_mu, res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s mean accumulation across years, thr=%.2f", s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_ACCUM_thr_%s.png", s, thr_txt)))
-
-    plot_cropped_field(ss$wet_hours, res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s mean wet hours across years, thr=%.2f", s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_WETHOURS_thr_%s.png", s, thr_txt)))
+    plot_cropped_field(
+      ss$wet_hours,
+      res_thr$variance_ref_list,
+      xlim, ylim,
+      main_title = sprintf("%s mean wet hours across 2016-2025, band %s", s, band_label),
+      cap_quant = cap_quant,
+      palette_end = palette_end,
+      output_file = file.path(out_dir, sprintf("10_year_%s_WETHOURS_band_%s.png", s, band_txt))
+    )
   }
 }
 
-plot_interannual_sd_products <- function(res_thr, out_dir,xlim = c(480,840), ylim = c(60,300),cap_quant = 0.99, palette_end = 0.99) {
+message("Start Plotting")
 
-  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  thr_txt <- gsub("\\.", "p", sprintf("%.2f", res_thr$threshold))
+for (band_name in names(res_all)) {
 
-  yr_min <- min(res_thr$years)
-  yr_max <- max(res_thr$years)
+  plot_interannual_products(
+    res_all[[band_name]],
+    out_dir = file.path(out_dir, paste0("band_", band_name))
+  )
 
-  # -----------------------------
-  # ANNUAL SD
-  # -----------------------------
-
-  plot_cropped_field(res_thr$interannual_sd$mean_mu$sd,
-                     res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual SD μ (%s–%s), thr=%.2f", yr_min, yr_max, res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_SD_MU_thr_%s.png", thr_txt)))
-
-  plot_cropped_field(res_thr$interannual_sd$mean_iqr$sd,
-                     res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual SD IQR(90-10), thr=%.2f",res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir,sprintf("INTERANNUAL_SD_IQR_thr_%s.png", thr_txt)))
-
-  plot_cropped_field(res_thr$interannual_sd$accum_mu$sd,
-                     res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual SD accumulation (mm), thr=%.2f",res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir,sprintf("INTERANNUAL_SD_ACCUM_thr_%s.png", thr_txt)))
-
-  plot_cropped_field(res_thr$interannual_sd$wet_hours$sd,
-                     res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual SD wet hours, thr=%.2f",res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir,sprintf("INTERANNUAL_SD_WETHOURS_thr_%s.png", thr_txt)))
-
-  # -----------------------------
-  # SEASONAL SD
-  # -----------------------------
-
-  for (s in names(res_thr$interseasonal_sd)) {
-
-    ss_sd <- res_thr$interseasonal_sd[[s]]
-
-    plot_cropped_field(ss_sd$mean_mu$sd,
-                       res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s interannual SD μ, thr=%.2f",
-                                       s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir,
-                         sprintf("INTERSEASON_%s_SD_MU_thr_%s.png", s, thr_txt)))
-
-    plot_cropped_field(ss_sd$mean_iqr$sd,
-                       res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s interannual SD IQR, thr=%.2f",
-                                       s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir,
-                         sprintf("INTERSEASON_%s_SD_IQR_thr_%s.png", s, thr_txt)))
-
-    plot_cropped_field(ss_sd$accum_mu$sd,
-                       res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s interannual SD accumulation, thr=%.2f",
-                                       s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir,
-                         sprintf("INTERSEASON_%s_SD_ACCUM_thr_%s.png", s, thr_txt)))
-
-    plot_cropped_field(ss_sd$wet_hours$sd,
-                       res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s interannual SD wet hours, thr=%.2f",
-                                       s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir,
-                         sprintf("INTERSEASON_%s_SD_WETHOURS_thr_%s.png", s, thr_txt)))
-  }
-
-  invisible(TRUE)
 }
+
+message("Done.")
+
 
 #years <- 2016:2025
 #thresholds <- c(0.1)
@@ -364,14 +306,3 @@ plot_interannual_sd_products <- function(res_thr, out_dir,xlim = c(480,840), yli
 
 #out_dir <- file.path("out_plots", sprintf("interannual_%d_%d", min(years), max(years)))
 #dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-
-for (thr in names(res_all)) {
-    if (is.null(res_all[[thr]]$interannual_sd)) {
-    stop("SD not found for threshold ", thr)
-  }
-  plot_interannual_sd_products(res_all[[thr]],
-                            out_dir = file.path(out_dir, paste0("thr_", gsub("\\.", "p", thr))))
-}
-
-
-message("Done.")

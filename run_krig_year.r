@@ -89,14 +89,14 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
   variance_raw_list <- lapply(variance_crop_list, strip_attrs_keep_dim)
 
   kriging_thr_list <- lapply(kriging_crop_list, function(m) {
-    m[m < min_threshold] <- NA_real_
+    m[!(m > min_threshold & m <= max_threshold)] <- NA_real_
     strip_attrs_keep_dim(m)
   })
 
   # Annual fields
   annual_mean_mu   <- aggregate_mean(kriging_thr_list)$mean
   annual_accum_mu  <- aggregate_sum(kriging_thr_list)$sum  
-  annual_wet_hours <- aggregate_wet_hours(kriging_thr_list, min_threshold, max_threshold)
+  annual_wet_hours <- aggregate_wet_hours(kriging_crop_list, min_threshold, max_threshold)
 
   iqr_list <- compute_iqr_list(kriging_thr_list, variance_raw_list)
   annual_mean_iqr <- aggregate_mean(iqr_list)$mean
@@ -270,34 +270,44 @@ thr_txt <- if (min_ok && max_ok) {
   }
   }
   # Annual
-  title_txt <- sprintf("%s annual wet hours (%s)", year_label, thr_label)
+period_txt <- sprintf("%s annual", year_label)
 
-    plot_one(
-      res$annual$wet_hours,
-      sprintf("ANNUAL_WET_HOURS_%s_thr_%s.png", year_label, thr_txt),
-      title_txt
-    )
+plot_one(
+  res$annual$wet_hours,
+  sprintf("ANNUAL_WET_HOURS_%s_thr_%s.png", year_label, thr_txt),
+  sprintf("%s wet hours (%s)", period_txt, thr_label)
+)
 
-  # Seasonal
-  for (s in names(res$seasonal)) {
+plot_one(
+  res$annual$mean_iqr,
+  sprintf("ANNUAL_IQR_%s_thr_%s.png", year_label, thr_txt),
+  sprintf("%s mean IQR (%s)", period_txt, thr_label)
+)
 
-    season_title_txt <- sprintf("%s %s wet hours (%s)", year_label, s, thr_label)
 
-    plot_one(
-    res$seasonal[[s]]$wet_hours,
-    sprintf("SEASON_%s_WET_HOURS_%s_thr_%s.png", s, year_label, thr_txt),
-    season_title_txt
-  )
+  # # Seasonal
+  # for (s in names(res$seasonal)) {
+
+  #   season_title_txt <- sprintf("%s %s wet hours (%s)", year_label, s, thr_label)
+
+  #   plot_one(
+  #   res$seasonal[[s]]$wet_hours,
+  #   sprintf("SEASON_%s_WET_HOURS_%s_thr_%s.png", s, year_label, thr_txt),
+  #   season_title_txt
+  # )
+
   invisible(TRUE)
-}}
+}
 
 print("here")
+
+mode   <- "relunc"
 
 res <- compute_year_threshold_stats_simple(
   rda_file = rda_file,
   min_threshold = 0.1,
   max_threshold = 0.5,
-  mu_min = mu_min
+  mu_min = 0.1
 )
 
 plot_stats_simple(
