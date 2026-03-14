@@ -134,10 +134,11 @@ compute_interannual_stats <- function(
       # Initialize accumulators from first valid year
       if (is.null(acc_annual)) {
         acc_annual <- list(
-          mean_mu   = acc_init(res$annual$mean_mu),
-          mean_iqr  = acc_init(res$annual$mean_iqr),
-          accum_mu  = acc_init(res$annual$accum_mu),
-          wet_hours = acc_init(res$annual$wet_hours)
+          mean_mu         = acc_init(res$annual$mean_mu),
+          mean_iqr        = acc_init(res$annual$mean_iqr),
+          accum_mu        = acc_init(res$annual$accum_mu),
+          wet_hours       = acc_init(res$annual$wet_hours),
+          rel_uncert_Bmed = acc_init(res$annual$rel_uncert_Bmed)
         )
 
         acc_season <- setNames(
@@ -147,26 +148,29 @@ compute_interannual_stats <- function(
 
         for (s in names(res$seasonal)) {
           acc_season[[s]] <- list(
-            mean_mu   = acc_init(res$seasonal[[s]]$mean_mu),
-            mean_iqr  = acc_init(res$seasonal[[s]]$mean_iqr),
-            accum_mu  = acc_init(res$seasonal[[s]]$accum_mu),
-            wet_hours = acc_init(res$seasonal[[s]]$wet_hours)
+            mean_mu         = acc_init(res$seasonal[[s]]$mean_mu),
+            mean_iqr        = acc_init(res$seasonal[[s]]$mean_iqr),
+            accum_mu        = acc_init(res$seasonal[[s]]$accum_mu),
+            wet_hours       = acc_init(res$seasonal[[s]]$wet_hours),
+            rel_uncert_Bmed = acc_init(res$seasonal[[s]]$rel_uncert_Bmed)
           )
         }
       }
 
       # Annual add
-      acc_annual$mean_mu   <- acc_add(acc_annual$mean_mu,   res$annual$mean_mu)
-      acc_annual$mean_iqr  <- acc_add(acc_annual$mean_iqr,  res$annual$mean_iqr)
-      acc_annual$accum_mu  <- acc_add(acc_annual$accum_mu,  res$annual$accum_mu)
-      acc_annual$wet_hours <- acc_add(acc_annual$wet_hours, res$annual$wet_hours)
+      acc_annual$mean_mu         <- acc_add(acc_annual$mean_mu,         res$annual$mean_mu)
+      acc_annual$mean_iqr        <- acc_add(acc_annual$mean_iqr,        res$annual$mean_iqr)
+      acc_annual$accum_mu        <- acc_add(acc_annual$accum_mu,        res$annual$accum_mu)
+      acc_annual$wet_hours       <- acc_add(acc_annual$wet_hours,       res$annual$wet_hours)
+      acc_annual$rel_uncert_Bmed <- acc_add(acc_annual$rel_uncert_Bmed, res$annual$rel_uncert_Bmed)
 
       # Seasonal add
       for (s in names(res$seasonal)) {
-        acc_season[[s]]$mean_mu   <- acc_add(acc_season[[s]]$mean_mu,   res$seasonal[[s]]$mean_mu)
-        acc_season[[s]]$mean_iqr  <- acc_add(acc_season[[s]]$mean_iqr,  res$seasonal[[s]]$mean_iqr)
-        acc_season[[s]]$accum_mu  <- acc_add(acc_season[[s]]$accum_mu,  res$seasonal[[s]]$accum_mu)
-        acc_season[[s]]$wet_hours <- acc_add(acc_season[[s]]$wet_hours, res$seasonal[[s]]$wet_hours)
+        acc_season[[s]]$mean_mu         <- acc_add(acc_season[[s]]$mean_mu,         res$seasonal[[s]]$mean_mu)
+        acc_season[[s]]$mean_iqr        <- acc_add(acc_season[[s]]$mean_iqr,        res$seasonal[[s]]$mean_iqr)
+        acc_season[[s]]$accum_mu        <- acc_add(acc_season[[s]]$accum_mu,        res$seasonal[[s]]$accum_mu)
+        acc_season[[s]]$wet_hours       <- acc_add(acc_season[[s]]$wet_hours,       res$seasonal[[s]]$wet_hours)
+        acc_season[[s]]$rel_uncert_Bmed <- acc_add(acc_season[[s]]$rel_uncert_Bmed, res$seasonal[[s]]$rel_uncert_Bmed)
       }
     }
 
@@ -177,18 +181,20 @@ compute_interannual_stats <- function(
     }
 
     annual_mean <- list(
-      mean_mu   = acc_mean(acc_annual$mean_mu),
-      mean_iqr  = acc_mean(acc_annual$mean_iqr),
-      accum_mu  = acc_mean(acc_annual$accum_mu),
-      wet_hours = acc_mean(acc_annual$wet_hours)
+      mean_mu         = acc_mean(acc_annual$mean_mu),
+      mean_iqr        = acc_mean(acc_annual$mean_iqr),
+      accum_mu        = acc_mean(acc_annual$accum_mu),
+      wet_hours       = acc_mean(acc_annual$wet_hours),
+      rel_uncert_Bmed = acc_mean(acc_annual$rel_uncert_Bmed)
     )
 
     seasonal_mean <- lapply(acc_season, function(a) {
       list(
-        mean_mu   = acc_mean(a$mean_mu),
-        mean_iqr  = acc_mean(a$mean_iqr),
-        accum_mu  = acc_mean(a$accum_mu),
-        wet_hours = acc_mean(a$wet_hours)
+        mean_mu         = acc_mean(a$mean_mu),
+        mean_iqr        = acc_mean(a$mean_iqr),
+        accum_mu        = acc_mean(a$accum_mu),
+        wet_hours       = acc_mean(a$wet_hours),
+        rel_uncert_Bmed = acc_mean(a$rel_uncert_Bmed)
       )
     })
 
@@ -204,7 +210,6 @@ compute_interannual_stats <- function(
 
   out
 }
-
 
 message("Start computation")
 
@@ -259,6 +264,21 @@ plot_interannual_products <- function(
     output_file = file.path(out_dir, sprintf("10-year_WETHOURS_band_%s.png", band_txt))
   )
 
+    # Annual median relative uncertainty
+    plot_cropped_field(
+    res_thr$interannual_mean$rel_uncert_Bmed,
+    res_thr$variance_ref_list,
+    xlim, ylim,
+    main_title = sprintf(
+      "10-year mean median relative uncertainty (years %s-%s) , band %s",
+      min(res_thr$years), max(res_thr$years), band_label
+    ),
+    cap_quant = cap_quant,
+    palette_end = palette_end,
+    output_file = file.path(out_dir, sprintf("10-year_RELUNCRT_MED_band_%s.png", band_txt))
+  )
+
+
   # seasonal
   for (s in names(res_thr$interseasonal_mean)) {
     ss <- res_thr$interseasonal_mean[[s]]
@@ -282,6 +302,20 @@ plot_interannual_products <- function(
       palette_end = palette_end,
       output_file = file.path(out_dir, sprintf("10_year_%s_WETHOURS_band_%s.png", s, band_txt))
     )
+
+    plot_cropped_field(
+      ss$rel_uncert_Bmed,
+      res_thr$variance_ref_list,
+      xlim, ylim,
+      main_title = sprintf(
+        "%s mean median relative uncertainty across 2016-2025, band %s",
+        s, band_label
+      ),
+      cap_quant = cap_quant,
+      palette_end = palette_end,
+      output_file = file.path(out_dir, sprintf("10_year_%s_RELUNCRT_MED_band_%s.png", s, band_txt))
+    )
+
   }
 }
 

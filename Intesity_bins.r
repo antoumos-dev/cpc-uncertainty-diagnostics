@@ -30,7 +30,7 @@ source("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/R/uti
 
 ### load data ####
 
-year <- 2023
+year <- 2021
 
 rda_file <- sprintf(
   "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda",
