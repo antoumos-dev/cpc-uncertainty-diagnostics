@@ -418,11 +418,7 @@ aggregate_rel_uncert_B <- function(mu_list, iqr_list, mu_min = 0.1,
       x
     }
   )
-
-  iqr_rel <- apply(rel_arr, c(1,2), function(v) {
-  quantile(v, 0.75, na.rm = TRUE) -
-  quantile(v, 0.25, na.rm = TRUE)
-  })
+  
   out[n_valid < min_hours] <- NA_real_
   out
 }

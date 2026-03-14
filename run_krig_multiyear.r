@@ -138,7 +138,7 @@ compute_interannual_stats <- function(
           mean_iqr        = acc_init(res$annual$mean_iqr),
           accum_mu        = acc_init(res$annual$accum_mu),
           wet_hours       = acc_init(res$annual$wet_hours),
-          rel_uncert_Bmed = acc_init(res$annual$rel_uncert_Bmed)
+          rel_uncert_B_median = acc_init(res$annual$rel_uncert_B_median)
         )
 
         acc_season <- setNames(
@@ -152,7 +152,7 @@ compute_interannual_stats <- function(
             mean_iqr        = acc_init(res$seasonal[[s]]$mean_iqr),
             accum_mu        = acc_init(res$seasonal[[s]]$accum_mu),
             wet_hours       = acc_init(res$seasonal[[s]]$wet_hours),
-            rel_uncert_Bmed = acc_init(res$seasonal[[s]]$rel_uncert_Bmed)
+            rel_uncert_B_median = acc_init(res$seasonal[[s]]$rel_uncert_B_median)
           )
         }
       }
@@ -162,7 +162,7 @@ compute_interannual_stats <- function(
       acc_annual$mean_iqr        <- acc_add(acc_annual$mean_iqr,        res$annual$mean_iqr)
       acc_annual$accum_mu        <- acc_add(acc_annual$accum_mu,        res$annual$accum_mu)
       acc_annual$wet_hours       <- acc_add(acc_annual$wet_hours,       res$annual$wet_hours)
-      acc_annual$rel_uncert_Bmed <- acc_add(acc_annual$rel_uncert_Bmed, res$annual$rel_uncert_Bmed)
+      acc_annual$rel_uncert_B_median <- acc_add(acc_annual$rel_uncert_B_median, res$annual$rel_uncert_B_median)
 
       # Seasonal add
       for (s in names(res$seasonal)) {
@@ -170,7 +170,7 @@ compute_interannual_stats <- function(
         acc_season[[s]]$mean_iqr        <- acc_add(acc_season[[s]]$mean_iqr,        res$seasonal[[s]]$mean_iqr)
         acc_season[[s]]$accum_mu        <- acc_add(acc_season[[s]]$accum_mu,        res$seasonal[[s]]$accum_mu)
         acc_season[[s]]$wet_hours       <- acc_add(acc_season[[s]]$wet_hours,       res$seasonal[[s]]$wet_hours)
-        acc_season[[s]]$rel_uncert_Bmed <- acc_add(acc_season[[s]]$rel_uncert_Bmed, res$seasonal[[s]]$rel_uncert_Bmed)
+        acc_season[[s]]$rel_uncert_B_median <- acc_add(acc_season[[s]]$rel_uncert_B_median, res$seasonal[[s]]$rel_uncert_B_median)
       }
     }
 
@@ -185,7 +185,7 @@ compute_interannual_stats <- function(
       mean_iqr        = acc_mean(acc_annual$mean_iqr),
       accum_mu        = acc_mean(acc_annual$accum_mu),
       wet_hours       = acc_mean(acc_annual$wet_hours),
-      rel_uncert_Bmed = acc_mean(acc_annual$rel_uncert_Bmed)
+      rel_uncert_B_median = acc_mean(acc_annual$rel_uncert_B_median)
     )
 
     seasonal_mean <- lapply(acc_season, function(a) {
@@ -194,7 +194,7 @@ compute_interannual_stats <- function(
         mean_iqr        = acc_mean(a$mean_iqr),
         accum_mu        = acc_mean(a$accum_mu),
         wet_hours       = acc_mean(a$wet_hours),
-        rel_uncert_Bmed = acc_mean(a$rel_uncert_Bmed)
+        rel_uncert_B_median = acc_mean(a$rel_uncert_B_median)
       )
     })
 
@@ -266,7 +266,7 @@ plot_interannual_products <- function(
 
     # Annual median relative uncertainty
     plot_cropped_field(
-    res_thr$interannual_mean$rel_uncert_Bmed,
+    res_thr$interannual_mean$rel_uncert_B_median,
     res_thr$variance_ref_list,
     xlim, ylim,
     main_title = sprintf(
@@ -304,7 +304,7 @@ plot_interannual_products <- function(
     )
 
     plot_cropped_field(
-      ss$rel_uncert_Bmed,
+      ss$rel_uncert_B_median,
       res_thr$variance_ref_list,
       xlim, ylim,
       main_title = sprintf(
