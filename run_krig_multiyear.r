@@ -163,7 +163,7 @@ compute_interannual_stats <- function(
       acc_annual$accum_mu        <- acc_add(acc_annual$accum_mu,        res$annual$accum_mu)
       acc_annual$wet_hours       <- acc_add(acc_annual$wet_hours,       res$annual$wet_hours)
       acc_annual$rel_uncert_B_median <- acc_add(acc_annual$rel_uncert_B_median, res$annual$rel_uncert_B_median)
-
+      
       # Seasonal add
       for (s in names(res$seasonal)) {
         acc_season[[s]]$mean_mu         <- acc_add(acc_season[[s]]$mean_mu,         res$seasonal[[s]]$mean_mu)
@@ -263,7 +263,7 @@ plot_interannual_products <- function(
     palette_end = palette_end,
     output_file = file.path(out_dir, sprintf("10-year_WETHOURS_band_%s.png", band_txt))
   )
-
+  message("ooooo")
     # Annual median relative uncertainty
     plot_cropped_field(
     res_thr$interannual_mean$rel_uncert_B_median,
