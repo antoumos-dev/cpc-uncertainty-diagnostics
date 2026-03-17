@@ -73,13 +73,15 @@ res_all <- compute_interannual_stats(
 )
 
 #for (thr in names(res_all)) {
- # plot_interannual_products(res_all[[thr]], out_dir)
+# plot_interannual_products(res_all[[thr]], out_dir)
 #plot_interannual_sd_products(res_all[[thr]], out_dir)
 #}
 
-
 out_dir <- ("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/out_plots/interannual_2016_2025/")
 
+
+
+#### function for interactive ###
 compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda") {
 
   out <- vector("list", length(thresholds))
@@ -193,21 +195,21 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
       )
     })
     # finalize SD (new)
-    annual_sd <- list(
-      mean_mu   = acc_sd_finalize(acc_annual_sd$mean_mu),
-      mean_iqr  = acc_sd_finalize(acc_annual_sd$mean_iqr),
-      accum_mu  = acc_sd_finalize(acc_annual_sd$accum_mu),
-      wet_hours = acc_sd_finalize(acc_annual_sd$wet_hours)
-    )
+    # annual_sd <- list(
+    #   mean_mu   = acc_sd_finalize(acc_annual_sd$mean_mu),
+    #   mean_iqr  = acc_sd_finalize(acc_annual_sd$mean_iqr),
+    #   accum_mu  = acc_sd_finalize(acc_annual_sd$accum_mu),
+    #   wet_hours = acc_sd_finalize(acc_annual_sd$wet_hours)
+    # )
 
-    seasonal_sd <- lapply(acc_season_sd, function(a) {
-      list(
-        mean_mu   = acc_sd_finalize(a$mean_mu),
-        mean_iqr  = acc_sd_finalize(a$mean_iqr),
-        accum_mu  = acc_sd_finalize(a$accum_mu),
-        wet_hours = acc_sd_finalize(a$wet_hours)
-      )
-    })
+    # seasonal_sd <- lapply(acc_season_sd, function(a) {
+    #   list(
+    #     mean_mu   = acc_sd_finalize(a$mean_mu),
+    #     mean_iqr  = acc_sd_finalize(a$mean_iqr),
+    #     accum_mu  = acc_sd_finalize(a$accum_mu),
+    #     wet_hours = acc_sd_finalize(a$wet_hours)
+    #   )
+    # })
 
       out[[as.character(thr)]] <- list(
       threshold = thr,
@@ -230,50 +232,61 @@ plot_interannual_products <- function(res_thr, out_dir,
   thr_txt <- gsub("\\.", "p", sprintf("%.2f", res_thr$threshold))
 
   # annual
-  plot_cropped_field(res_thr$interannual$mean_mu,  res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual mean μ (years %s–%s), thr=%.2f",
-                                     min(res_thr$years), max(res_thr$years), res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_MU_thr_%s.png", thr_txt)))
+  # plot_cropped_field(res_thr$interannual$mean_mu,  res_thr$variance_ref_list, xlim, ylim,
+  #                    title = sprintf("Interannual mean μ (years %s–%s), thr=%.2f",
+  #                                    min(res_thr$years), max(res_thr$years), res_thr$threshold),
+  #                    cap_quant = cap_quant, palette_end = palette_end,
+  #                    output_file = file.path(out_dir, sprintf("INTERANNUAL_MU_thr_%s.png", thr_txt)))
 
-  plot_cropped_field(res_thr$interannual$mean_iqr, res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual mean IQR(90-10), thr=%.2f", res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_IQR_thr_%s.png", thr_txt)))
+  # plot_cropped_field(res_thr$interannual$mean_iqr, res_thr$variance_ref_list, xlim, ylim,
+  #                    title = sprintf("Interannual mean IQR(90-10), thr=%.2f", res_thr$threshold),
+  #                    cap_quant = cap_quant, palette_end = palette_end,
+  #                    output_file = file.path(out_dir, sprintf("INTERANNUAL_IQR_thr_%s.png", thr_txt)))
 
-  plot_cropped_field(res_thr$interannual$accum_mu, res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual mean accumulation (mm), thr=%.2f", res_thr$threshold),
-                     cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_ACCUM_thr_%s.png", thr_txt)))
+  # plot_cropped_field(res_thr$interannual$accum_mu, res_thr$variance_ref_list, xlim, ylim,
+  #                    title = sprintf("Interannual mean accumulation (mm), thr=%.2f", res_thr$threshold),
+  #                    cap_quant = cap_quant, palette_end = palette_end,
+  #                    output_file = file.path(out_dir, sprintf("INTERANNUAL_ACCUM_thr_%s.png", thr_txt)))
 
-  plot_cropped_field(res_thr$interannual$wet_hours, res_thr$variance_ref_list, xlim, ylim,
-                     title = sprintf("Interannual mean wet hours, thr=%.2f", res_thr$threshold),
+  # plot_cropped_field(res_thr$interannual$wet_hours, res_thr$variance_ref_list, xlim, ylim,
+  #                    title = sprintf("Interannual mean wet hours, thr=%.2f", res_thr$threshold),
+  #                    cap_quant = cap_quant, palette_end = palette_end,
+  #                    output_file = file.path(out_dir, sprintf("INTERANNUAL_WETHOURS_thr_%s.png", thr_txt)))
+
+  plot_cropped_field(res_thr$interannual$rel_uncert_Bmed, res_thr$variance_ref_list, xlim, ylim,
+                     title = sprintf("10 year mean of annual median(IQR/μ), thr=%.2f", res_thr$threshold),
                      cap_quant = cap_quant, palette_end = palette_end,
-                     output_file = file.path(out_dir, sprintf("INTERANNUAL_WETHOURS_thr_%s.png", thr_txt)))
+                     output_file = file.path(out_dir, sprintf("INTERANNUAL_RELUNC_thr_%s.png", thr_txt)))              
 
   # seasonal
   for (s in names(res_thr$interseasonal)) {
     ss <- res_thr$interseasonal[[s]]
 
-    plot_cropped_field(ss$mean_mu,  res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s mean μ across years, thr=%.2f", s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_MU_thr_%s.png", s, thr_txt)))
+    # plot_cropped_field(ss$mean_mu,  res_thr$variance_ref_list, xlim, ylim,
+    #                    title = sprintf("%s mean μ across years, thr=%.2f", s, res_thr$threshold),
+    #                    cap_quant = cap_quant, palette_end = palette_end,
+    #                    output_file = file.path(out_dir, sprintf("INTERSEASON_%s_MU_thr_%s.png", s, thr_txt)))
 
-    plot_cropped_field(ss$mean_iqr, res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s mean IQR across years, thr=%.2f", s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_IQR_thr_%s.png", s, thr_txt)))
+    # plot_cropped_field(ss$mean_iqr, res_thr$variance_ref_list, xlim, ylim,
+    #                    title = sprintf("%s mean IQR across years, thr=%.2f", s, res_thr$threshold),
+    #                    cap_quant = cap_quant, palette_end = palette_end,
+    #                    output_file = file.path(out_dir, sprintf("INTERSEASON_%s_IQR_thr_%s.png", s, thr_txt)))
 
-    plot_cropped_field(ss$accum_mu, res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s mean accumulation across years, thr=%.2f", s, res_thr$threshold),
-                       cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_ACCUM_thr_%s.png", s, thr_txt)))
+    # plot_cropped_field(ss$accum_mu, res_thr$variance_ref_list, xlim, ylim,
+    #                    title = sprintf("%s mean accumulation across years, thr=%.2f", s, res_thr$threshold),
+    #                    cap_quant = cap_quant, palette_end = palette_end,
+    #                    output_file = file.path(out_dir, sprintf("INTERSEASON_%s_ACCUM_thr_%s.png", s, thr_txt)))
 
-    plot_cropped_field(ss$wet_hours, res_thr$variance_ref_list, xlim, ylim,
-                       title = sprintf("%s mean wet hours across years, thr=%.2f", s, res_thr$threshold),
+    # plot_cropped_field(ss$wet_hours, res_thr$variance_ref_list, xlim, ylim,
+    #                    title = sprintf("%s mean wet hours across years, thr=%.2f", s, res_thr$threshold),
+    #                    cap_quant = cap_quant, palette_end = palette_end,
+    #                    output_file = file.path(out_dir, sprintf("INTERSEASON_%s_WETHOURS_thr_%s.png", s, thr_txt)))
+
+
+    plot_cropped_field(ss$rel_uncert_Bmed, res_thr$variance_ref_list, xlim, ylim,
+                       title = sprintf("%s 10 year mean of annual median(IQR/μ), thr=%.2f", s, res_thr$threshold),
                        cap_quant = cap_quant, palette_end = palette_end,
-                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_WETHOURS_thr_%s.png", s, thr_txt)))
+                       output_file = file.path(out_dir, sprintf("INTERSEASON_%s_RELUNC_thr_%s.png", s, thr_txt)))
   }
 }
 
@@ -365,12 +378,17 @@ plot_interannual_sd_products <- function(res_thr, out_dir,xlim = c(480,840), yli
 #out_dir <- file.path("out_plots", sprintf("interannual_%d_%d", min(years), max(years)))
 #dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
+message("Start plotting")
+
+#### could move plotting function into plotting utils later
+
 for (thr in names(res_all)) {
-    if (is.null(res_all[[thr]]$interannual_sd)) {
-    stop("SD not found for threshold ", thr)
-  }
-  plot_interannual_sd_products(res_all[[thr]],
-                            out_dir = file.path(out_dir, paste0("thr_", gsub("\\.", "p", thr))))
+
+  plot_interannual_products(
+    res_all[[thr]],
+    out_dir = file.path(out_dir, paste0("thr_", gsub("\\.", "p", thr)))
+  )
+
 }
 
 

@@ -499,7 +499,7 @@ compute_iqr_list <- function(kriging_raw_list, variance_raw_list) {
 }
 
 
-compute_year_threshold_stats_simple <- function(rda_file, threshold, mu_min = 0.1, rel_uncert_method = c("A", "B_median")) {
+compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_threshold = Inf, mu_min = 0.1, rel_uncert_method = c("A", "B_median","B_IQR")) {
 
   rel_uncert_method <- match.arg(rel_uncert_method)
   load(rda_file)  # expects: kriging_crop_list, variance_crop_list, timestamps
@@ -514,39 +514,40 @@ compute_year_threshold_stats_simple <- function(rda_file, threshold, mu_min = 0.
   variance_raw_list <- lapply(variance_crop_list, strip_attrs_keep_dim)
 
   kriging_thr_list <- lapply(kriging_crop_list, function(m) {
-    m[m < threshold] <- NA_real_
+    m[m < min_threshold] <- NA_real_
     strip_attrs_keep_dim(m)
   })
 
   # Annual fields
   annual_mean_mu   <- aggregate_mean(kriging_thr_list)$mean
   annual_accum_mu  <- aggregate_sum(kriging_thr_list)$sum  # hourly sums = mm
-  annual_wet_hours <- aggregate_wet_hours(kriging_thr_list, threshold)
+  annual_wet_hours <- aggregate_wet_hours(kriging_thr_list, min_threshold, max_threshold)
 
   iqr_list <- compute_iqr_list(kriging_thr_list, variance_raw_list)
   annual_mean_iqr <- aggregate_mean(iqr_list)$mean
   
   ### Relative uncertainty ##
-  rel_uncert_method <- match.arg(rel_uncert_method)
-  do_B <- (rel_uncert_method == "B_median")
-  
+
   # Option A (ratio of annual means)
   annual_rel_A <- annual_mean_iqr / annual_mean_mu
   annual_rel_A[!is.finite(annual_rel_A)] <- NA_real_
   annual_rel_A[annual_mean_mu < mu_min] <- NA_real_
   
   # Option B (median of hourly ratios)
-  annual_rel_Bmed <- if (do_B) {aggregate_rel_uncert_B(
+  annual_rel_Bmed <- aggregate_rel_uncert_B(
     mu_list   = kriging_thr_list,
     iqr_list  = iqr_list,
     mu_min    = mu_min,
     method    = "median",
-    min_hours = 50
-    )
-  } else {
-    NULL
-  }
+    min_hours = 20
+  )
 
+  annual_rel_B_iqr <- aggregate_rel_uncert_iqr(
+  mu_list   = kriging_thr_list,
+  iqr_list  = iqr_list,
+  mu_min    = mu_min,
+  min_hours = 10
+  )
 # Seasonal fields
   seasons  <- levels(season)
   seasonal <- setNames(vector("list", length(seasons)), seasons)
@@ -559,43 +560,51 @@ compute_year_threshold_stats_simple <- function(rda_file, threshold, mu_min = 0.
 
     s_mean_mu   <- aggregate_mean(s_mu_list)$mean
     s_accum_mu  <- aggregate_sum(s_mu_list)$sum
-    s_wet_hours <- aggregate_wet_hours(s_mu_list, threshold)
+    s_wet_hours <- aggregate_wet_hours(s_mu_list, min_threshold, max_threshold)
     s_mean_iqr  <- aggregate_mean(s_iqr_list)$mean
     
  #    Option A
-  s_rel_A <- s_mean_iqr / s_mean_mu
-  s_rel_A[!is.finite(s_rel_A)] <- NA_real_
-  s_rel_A[s_mean_mu < mu_min] <- NA_real_
+#  s_rel_A <- s_mean_iqr / s_mean_mu
+#  s_rel_A[!is.finite(s_rel_A)] <- NA_real_
+#  s_rel_A[s_mean_mu < mu_min] <- NA_real_
 
 # Option B median
-  s_rel_Bmed <- if (do_B) {aggregate_rel_uncert_B(
+  s_rel_Bmed <- aggregate_rel_uncert_B(
    mu_list   = s_mu_list,
     iqr_list  = s_iqr_list,
     mu_min    = mu_min,
     method    = "median",
-    min_hours = 20
-    )
-  } else {
-    NULL
-  }
+    min_hours = 10
+  )
+# Option B IQR of hourly relative uncertainty
+#  s_rel_B_iqr <- aggregate_rel_uncert_iqr(
+#    mu_list   = s_mu_list,
+#    iqr_list  = s_iqr_list,
+#    mu_min    = mu_min,
+#    min_hours = 10
+#  )
+    
     seasonal[[s]] <- list(
       mean_mu    = s_mean_mu,
       accum_mu   = s_accum_mu,
       wet_hours  = s_wet_hours,
       mean_iqr   = s_mean_iqr,
-      rel_uncert_A = s_rel_A,
+#      rel_uncert_A = s_rel_A,
       rel_uncert_B_median = s_rel_Bmed
+#      iqr_relative_uncertainty = s_rel_B_iqr
     )
   }
 
   list(
-    threshold = threshold,
+    min_threshold = min_threshold,
+    max_threshold = max_threshold,
     rel_uncert_method = rel_uncert_method,
     annual = list(
       mean_mu    = annual_mean_mu,
       mean_iqr   = annual_mean_iqr,
-      rel_uncert_A = annual_rel_A,
+#      rel_uncert_A = annual_rel_A,
       rel_uncert_B_median  = annual_rel_Bmed,
+ #     iqr_relative_uncertainty = annual_rel_B_iqr,
       accum_mu   = annual_accum_mu,
       wet_hours  = annual_wet_hours
     ),
@@ -603,6 +612,8 @@ compute_year_threshold_stats_simple <- function(rda_file, threshold, mu_min = 0.
     variance_ref_list = variance_ref_list
   )
 }
+
+
 
 compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda") {
 
@@ -627,7 +638,7 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
       }
 
       message("  Year ", yr)
-      res <- compute_year_threshold_stats_simple(rda_file, threshold = thr)
+      res <- compute_year_threshold_stats_simple(rda_file, min_threshold = thr,max_threshold = Inf,mu_min = 0.1, rel_uncert_method = "B_median") # x > thr
 
       # keep plotting coords from first valid year
       if (is.null(variance_ref_list)) variance_ref_list <- res$variance_ref_list
@@ -638,61 +649,64 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
           mean_mu   = acc_init(res$annual$mean_mu),
           mean_iqr  = acc_init(res$annual$mean_iqr),
           accum_mu  = acc_init(res$annual$accum_mu),
+          rel_uncert_Bmed   = acc_init(res$annual$rel_uncert_B_median),
           wet_hours = acc_init(res$annual$wet_hours)
         )
         #SD accumulators (Welford)
-        acc_annual_sd <- list(
-        mean_mu   = acc_sd_init(res$annual$mean_mu),
-        mean_iqr  = acc_sd_init(res$annual$mean_iqr),
-        accum_mu  = acc_sd_init(res$annual$accum_mu),
-        wet_hours = acc_sd_init(res$annual$wet_hours)
-        )
+        # acc_annual_sd <- list(
+        # mean_mu   = acc_sd_init(res$annual$mean_mu),
+        # mean_iqr  = acc_sd_init(res$annual$mean_iqr),
+        # accum_mu  = acc_sd_init(res$annual$accum_mu),
+        # wet_hours = acc_sd_init(res$annual$wet_hours)
+        # )
         acc_season <- setNames(vector("list", length(names(res$seasonal))), names(res$seasonal))
-        acc_season_sd <- setNames(vector("list", length(names(res$seasonal))), names(res$seasonal))
+        # acc_season_sd <- setNames(vector("list", length(names(res$seasonal))), names(res$seasonal))
         for (s in names(res$seasonal)) {
-          acc_season[[s]] <- list(
-          mean_mu   = acc_init(res$seasonal[[s]]$mean_mu),
-          mean_iqr  = acc_init(res$seasonal[[s]]$mean_iqr),
-          accum_mu  = acc_init(res$seasonal[[s]]$accum_mu),
-          wet_hours = acc_init(res$seasonal[[s]]$wet_hours)
-          )
-          acc_season_sd[[s]] <- list(
-          mean_mu   = acc_sd_init(res$seasonal[[s]]$mean_mu),
-          mean_iqr  = acc_sd_init(res$seasonal[[s]]$mean_iqr),
-          accum_mu  = acc_sd_init(res$seasonal[[s]]$accum_mu),
-          wet_hours = acc_sd_init(res$seasonal[[s]]$wet_hours)
+        acc_season[[s]] <- list(
+          mean_mu         = acc_init(res$seasonal[[s]]$mean_mu),
+          mean_iqr        = acc_init(res$seasonal[[s]]$mean_iqr),
+          rel_uncert_Bmed = acc_init(res$seasonal[[s]]$rel_uncert_B_median),
+          accum_mu        = acc_init(res$seasonal[[s]]$accum_mu),
+          wet_hours       = acc_init(res$seasonal[[s]]$wet_hours)
         )
+        #   acc_season_sd[[s]] <- list(
+        #   mean_mu   = acc_sd_init(res$seasonal[[s]]$mean_mu),
+        #   mean_iqr  = acc_sd_init(res$seasonal[[s]]$mean_iqr),
+        #   accum_mu  = acc_sd_init(res$seasonal[[s]]$accum_mu),
+        #   wet_hours = acc_sd_init(res$seasonal[[s]]$wet_hours)
+        # )
       }
     }
 
       # annual add
-      acc_annual$mean_mu   <- acc_add(acc_annual$mean_mu,   res$annual$mean_mu)
-      acc_annual$mean_iqr  <- acc_add(acc_annual$mean_iqr,  res$annual$mean_iqr)
-      acc_annual$accum_mu  <- acc_add(acc_annual$accum_mu,  res$annual$accum_mu)
-      acc_annual$wet_hours <- acc_add(acc_annual$wet_hours, res$annual$wet_hours)
-
+      acc_annual$mean_mu         <- acc_add(acc_annual$mean_mu,         res$annual$mean_mu)
+      acc_annual$mean_iqr        <- acc_add(acc_annual$mean_iqr,        res$annual$mean_iqr)
+      acc_annual$rel_uncert_Bmed <- acc_add(acc_annual$rel_uncert_Bmed, res$annual$rel_uncert_B_median)
+      acc_annual$accum_mu        <- acc_add(acc_annual$accum_mu,        res$annual$accum_mu)
+      acc_annual$wet_hours       <- acc_add(acc_annual$wet_hours,       res$annual$wet_hours)
       # seasonal add
       for (s in names(res$seasonal)) {
-        acc_season[[s]]$mean_mu   <- acc_add(acc_season[[s]]$mean_mu,   res$seasonal[[s]]$mean_mu)
-        acc_season[[s]]$mean_iqr  <- acc_add(acc_season[[s]]$mean_iqr,  res$seasonal[[s]]$mean_iqr)
-        acc_season[[s]]$accum_mu  <- acc_add(acc_season[[s]]$accum_mu,  res$seasonal[[s]]$accum_mu)
-        acc_season[[s]]$wet_hours <- acc_add(acc_season[[s]]$wet_hours, res$seasonal[[s]]$wet_hours)
-    }
+        acc_season[[s]]$mean_mu         <- acc_add(acc_season[[s]]$mean_mu,         res$seasonal[[s]]$mean_mu)
+        acc_season[[s]]$mean_iqr        <- acc_add(acc_season[[s]]$mean_iqr,        res$seasonal[[s]]$mean_iqr)
+        acc_season[[s]]$rel_uncert_Bmed <- acc_add(acc_season[[s]]$rel_uncert_Bmed, res$seasonal[[s]]$rel_uncert_B_median)
+        acc_season[[s]]$accum_mu        <- acc_add(acc_season[[s]]$accum_mu,        res$seasonal[[s]]$accum_mu)
+        acc_season[[s]]$wet_hours       <- acc_add(acc_season[[s]]$wet_hours,       res$seasonal[[s]]$wet_hours)
+      }
     
-      # SD add
-      # annual
-      acc_annual_sd$mean_mu   <- acc_sd_add(acc_annual_sd$mean_mu,   res$annual$mean_mu)
-      acc_annual_sd$mean_iqr  <- acc_sd_add(acc_annual_sd$mean_iqr,  res$annual$mean_iqr)
-      acc_annual_sd$accum_mu  <- acc_sd_add(acc_annual_sd$accum_mu,  res$annual$accum_mu)
-      acc_annual_sd$wet_hours <- acc_sd_add(acc_annual_sd$wet_hours, res$annual$wet_hours)
+  #     # SD add
+  #     # annual
+  #     acc_annual_sd$mean_mu   <- acc_sd_add(acc_annual_sd$mean_mu,   res$annual$mean_mu)
+  #     acc_annual_sd$mean_iqr  <- acc_sd_add(acc_annual_sd$mean_iqr,  res$annual$mean_iqr)
+  #     acc_annual_sd$accum_mu  <- acc_sd_add(acc_annual_sd$accum_mu,  res$annual$accum_mu)
+  #     acc_annual_sd$wet_hours <- acc_sd_add(acc_annual_sd$wet_hours, res$annual$wet_hours)
 
-      # seasonal
-      for (s in names(res$seasonal)) {
-      acc_season_sd[[s]]$mean_mu   <- acc_sd_add(acc_season_sd[[s]]$mean_mu,   res$seasonal[[s]]$mean_mu)
-      acc_season_sd[[s]]$mean_iqr  <- acc_sd_add(acc_season_sd[[s]]$mean_iqr,  res$seasonal[[s]]$mean_iqr)
-      acc_season_sd[[s]]$accum_mu  <- acc_sd_add(acc_season_sd[[s]]$accum_mu,  res$seasonal[[s]]$accum_mu)
-      acc_season_sd[[s]]$wet_hours <- acc_sd_add(acc_season_sd[[s]]$wet_hours, res$seasonal[[s]]$wet_hours)
-    }
+  #     # seasonal
+  #     for (s in names(res$seasonal)) {
+  #     acc_season_sd[[s]]$mean_mu   <- acc_sd_add(acc_season_sd[[s]]$mean_mu,   res$seasonal[[s]]$mean_mu)
+  #     acc_season_sd[[s]]$mean_iqr  <- acc_sd_add(acc_season_sd[[s]]$mean_iqr,  res$seasonal[[s]]$mean_iqr)
+  #     acc_season_sd[[s]]$accum_mu  <- acc_sd_add(acc_season_sd[[s]]$accum_mu,  res$seasonal[[s]]$accum_mu)
+  #     acc_season_sd[[s]]$wet_hours <- acc_sd_add(acc_season_sd[[s]]$wet_hours, res$seasonal[[s]]$wet_hours)
+  #   }
   }
     # finalize means
     if (is.null(acc_annual)) {
@@ -704,7 +718,8 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
       mean_mu   = acc_mean(acc_annual$mean_mu),
       mean_iqr  = acc_mean(acc_annual$mean_iqr),
       accum_mu  = acc_mean(acc_annual$accum_mu),
-      wet_hours = acc_mean(acc_annual$wet_hours)
+      wet_hours = acc_mean(acc_annual$wet_hours),
+      rel_uncert_Bmed   = acc_mean(acc_annual$rel_uncert_Bmed) ## 10-year mean of annual median(IQR/mu)
     )
 
     seasonal_mean <- lapply(acc_season, function(a) {
@@ -712,33 +727,34 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
         mean_mu   = acc_mean(a$mean_mu),
         mean_iqr  = acc_mean(a$mean_iqr),
         accum_mu  = acc_mean(a$accum_mu),
-        wet_hours = acc_mean(a$wet_hours)
+        wet_hours = acc_mean(a$wet_hours),
+        rel_uncert_Bmed = acc_mean(a$rel_uncert_Bmed)
       )
     })
     # finalize SD (new)
-    annual_sd <- list(
-      mean_mu   = acc_sd_finalize(acc_annual_sd$mean_mu),
-      mean_iqr  = acc_sd_finalize(acc_annual_sd$mean_iqr),
-      accum_mu  = acc_sd_finalize(acc_annual_sd$accum_mu),
-      wet_hours = acc_sd_finalize(acc_annual_sd$wet_hours)
-    )
+    # annual_sd <- list(
+    #   mean_mu   = acc_sd_finalize(acc_annual_sd$mean_mu),
+    #   mean_iqr  = acc_sd_finalize(acc_annual_sd$mean_iqr),
+    #   accum_mu  = acc_sd_finalize(acc_annual_sd$accum_mu),
+    #   wet_hours = acc_sd_finalize(acc_annual_sd$wet_hours)
+    # )
 
-    seasonal_sd <- lapply(acc_season_sd, function(a) {
-      list(
-        mean_mu   = acc_sd_finalize(a$mean_mu),
-        mean_iqr  = acc_sd_finalize(a$mean_iqr),
-        accum_mu  = acc_sd_finalize(a$accum_mu),
-        wet_hours = acc_sd_finalize(a$wet_hours)
-      )
-    })
+    # seasonal_sd <- lapply(acc_season_sd, function(a) {
+    #   list(
+    #     mean_mu   = acc_sd_finalize(a$mean_mu),
+    #     mean_iqr  = acc_sd_finalize(a$mean_iqr),
+    #     accum_mu  = acc_sd_finalize(a$accum_mu),
+    #     wet_hours = acc_sd_finalize(a$wet_hours)
+    #   )
+    # })
 
       out[[as.character(thr)]] <- list(
       threshold = thr,
       years = years,
       interannual_mean = annual_mean,
       interseasonal_mean = seasonal_mean,
-      interannual_sd = annual_sd,
-      interseasonal_sd = seasonal_sd,
+ #     interannual_sd = annual_sd,
+  #    interseasonal_sd = seasonal_sd,
       variance_ref_list = variance_ref_list
     )
 }
