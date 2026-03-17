@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --time=4:00:00
+#SBATCH --time=12:00:00
 
 # Activate the user environment
 #bash
@@ -39,7 +39,7 @@ mkdir -p logs
 START_YEAR=2016
 END_YEAR=2025
 
-BANDS="10-20"
+BANDS="0.01-0.1,0.1-1,1-2"
 
 srun Rscript run_krig_multiyear.r \
     $START_YEAR \
