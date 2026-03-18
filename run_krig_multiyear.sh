@@ -39,4 +39,8 @@ mkdir -p logs
 START_YEAR=2016
 END_YEAR=2025
 
-srun Rscript run_krig_multiyear.r "$START_YEAR" "$END_YEAR"
+# Thresholds
+
+THRESHOLD="0.1,1"
+
+srun Rscript run_krig_multiyear.r "$START_YEAR" "$END_YEAR" "$THRESHOLD" 

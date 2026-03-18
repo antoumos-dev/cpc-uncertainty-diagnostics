@@ -67,7 +67,7 @@ plot_cropped_field <- function(
   full_cols <- length(ys_full)
 
   if (nrow(Z) == full_rows && ncol(Z) == full_cols) {
-    # FULL DOMAIN → crop (rows=y, cols=x)
+    # FULL DOMAIN → crop
     Z_crop  <- Z[x_idx, y_idx]
     xs_crop <- xs_full[x_idx]
     ys_crop <- ys_full[y_idx]
@@ -85,7 +85,15 @@ plot_cropped_field <- function(
   if (is.null(vmax)) vmax <- quantile(Z_crop, cap_quant, na.rm = TRUE)
 
   Zplot <- pmin(pmax(Z_crop, vmin), vmax)
+  
 
+  cat(sprintf(
+  "%s | crop range: [%.3f, %.3f] | scale: [%.3f, %.3f]\n",
+  title,
+  min(Z_crop, na.rm = TRUE),
+  max(Z_crop, na.rm = TRUE),
+  vmin, vmax
+  ))
   # ---------------------------------------------------------
   # Palette
   # ---------------------------------------------------------
@@ -759,4 +767,27 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
     )
 }
   out
+}
+
+#### For plotting ####
+
+get_common_color_scale <- function(fields, probs = NULL) {
+  vals <- unlist(lapply(fields, c), use.names = FALSE)
+  vals <- vals[is.finite(vals)]
+
+  if (!length(vals)) {
+    return(list(vmin = NA_real_, vmax = NA_real_, n=0))
+  }
+
+  if (is.null(probs)) {
+    vmin <- min(vals)
+    vmax <- max(vals)
+  } else {
+    qs <- quantile(vals, probs = probs, na.rm = TRUE)
+    vmin <- qs[1]
+    vmax <- qs[2]
+  }
+
+  list(vmin = vmin, vmax = vmax, n = length(vals))
+
 }
