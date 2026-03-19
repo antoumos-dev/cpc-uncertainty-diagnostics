@@ -598,7 +598,7 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
 }
 
 
-
+#### older one ####
 compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda") {
 
   out <- vector("list", length(thresholds))

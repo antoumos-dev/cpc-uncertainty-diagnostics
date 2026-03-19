@@ -39,7 +39,7 @@ mkdir -p logs
 START_YEAR=2016
 END_YEAR=2025
 
-BANDS="0.01-0.1,0.1-1,1-2"
+BANDS="0.1-0.5,0.5-1,1-2"
 
 srun Rscript run_krig_multiyear.r \
     $START_YEAR \
