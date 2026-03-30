@@ -317,7 +317,7 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
 mode   <- "relunc"     # "all" or "relunc"
 mu_min <- 0.1       # mask for tiny mu in relunc
 
-thresholds <- c(2.0)  # can be c(0.1, 0.5, 1.0) etc
+thresholds <- c(0.1)  # can be c(0.1, 0.5, 1.0) etc
 
 
 # # -----------------------------
