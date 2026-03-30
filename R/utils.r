@@ -536,11 +536,6 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
   
   ### Relative uncertainty ##
 
-  # Option A (ratio of annual means)
-  annual_rel_A <- annual_mean_iqr / annual_mean_mu
-  annual_rel_A[!is.finite(annual_rel_A)] <- NA_real_
-  annual_rel_A[annual_mean_mu < mu_min] <- NA_real_
-  
   # Option B (median of hourly ratios)
   annual_rel_Bmed <- aggregate_rel_uncert_B(
     mu_list   = kriging_thr_list,
@@ -571,19 +566,15 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
     s_wet_hours <- aggregate_wet_hours(s_mu_list, min_threshold, max_threshold)
     s_mean_iqr  <- aggregate_mean(s_iqr_list)$mean
     
- #    Option A
-#  s_rel_A <- s_mean_iqr / s_mean_mu
-#  s_rel_A[!is.finite(s_rel_A)] <- NA_real_
-#  s_rel_A[s_mean_mu < mu_min] <- NA_real_
-
 # Option B median
-  s_rel_Bmed <- aggregate_rel_uncert_B(
-   mu_list   = s_mu_list,
+    s_rel_Bmed <- aggregate_rel_uncert_B(
+    mu_list   = s_mu_list,
     iqr_list  = s_iqr_list,
     mu_min    = mu_min,
     method    = "median",
     min_hours = 10
-  )
+    )
+
 # Option B IQR of hourly relative uncertainty
 #  s_rel_B_iqr <- aggregate_rel_uncert_iqr(
 #    mu_list   = s_mu_list,
@@ -597,9 +588,32 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
       accum_mu   = s_accum_mu,
       wet_hours  = s_wet_hours,
       mean_iqr   = s_mean_iqr,
-#      rel_uncert_A = s_rel_A,
       rel_uncert_B_median = s_rel_Bmed
 #      iqr_relative_uncertainty = s_rel_B_iqr
+    )
+  }
+
+  safe_div <- function(num, den, eps = 1e-6) {
+  out <- ifelse(is.na(den) | abs(den) < eps, NA_real_, num / den)
+  out[!is.finite(out)] <- NA_real_
+  out
+  }
+
+  seasonal_ratios <- NULL
+  if (all(c("JJA", "DJF") %in% names(seasonal))) {
+    seasonal_ratios <- list(
+      mean_iqr_JJA_over_DJF = safe_div(
+        seasonal$JJA$mean_iqr,
+        seasonal$DJF$mean_iqr
+      ),
+      mean_mu_JJA_over_DJF = safe_div(
+        seasonal$JJA$mean_mu,
+        seasonal$DJF$mean_mu
+      ),
+      mean_relunc_JJA_over_DJF = safe_div(
+        seasonal$JJA$rel_uncert_B_median,
+        seasonal$DJF$rel_uncert_B_median
+      )
     )
   }
 
@@ -610,17 +624,16 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
     annual = list(
       mean_mu    = annual_mean_mu,
       mean_iqr   = annual_mean_iqr,
-#      rel_uncert_A = annual_rel_A,
       rel_uncert_B_median  = annual_rel_Bmed,
  #     iqr_relative_uncertainty = annual_rel_B_iqr,
       accum_mu   = annual_accum_mu,
       wet_hours  = annual_wet_hours
     ),
     seasonal = seasonal,
+    seasonal_ratios = seasonal_ratios,
     variance_ref_list = variance_ref_list
   )
 }
-
 
 
 compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda") {
@@ -637,6 +650,8 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
     acc_annual_sd <- NULL
     acc_season <- NULL
     acc_season_sd <- NULL
+    acc_seasonal_ratios <- NULL
+
 
     for (yr in years) {
       rda_file <- sprintf(rda_pattern, yr)
@@ -684,6 +699,13 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
         #   wet_hours = acc_sd_init(res$seasonal[[s]]$wet_hours)
         # )
       }
+      ### add seasonal ratios
+       if (!is.null(res$seasonal_ratios)) {
+          acc_seasonal_ratios <- list(
+            mean_iqr_JJA_over_DJF = acc_init(res$seasonal_ratios$mean_iqr_JJA_over_DJF),
+            mean_mu_JJA_over_DJF  = acc_init(res$seasonal_ratios$mean_mu_JJA_over_DJF)
+          )
+      }
     }
 
       # annual add
@@ -699,6 +721,18 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
         acc_season[[s]]$rel_uncert_Bmed <- acc_add(acc_season[[s]]$rel_uncert_Bmed, res$seasonal[[s]]$rel_uncert_B_median)
         acc_season[[s]]$accum_mu        <- acc_add(acc_season[[s]]$accum_mu,        res$seasonal[[s]]$accum_mu)
         acc_season[[s]]$wet_hours       <- acc_add(acc_season[[s]]$wet_hours,       res$seasonal[[s]]$wet_hours)
+      }
+
+      # yearly JJA/DJF ratios add
+      if (!is.null(res$seasonal_ratios) && !is.null(acc_seasonal_ratios)) {
+        acc_seasonal_ratios$mean_iqr_JJA_over_DJF <- acc_add(
+          acc_seasonal_ratios$mean_iqr_JJA_over_DJF,
+          res$seasonal_ratios$mean_iqr_JJA_over_DJF
+        )
+        acc_seasonal_ratios$mean_mu_JJA_over_DJF <- acc_add(
+          acc_seasonal_ratios$mean_mu_JJA_over_DJF,
+          res$seasonal_ratios$mean_mu_JJA_over_DJF
+        )
       }
     
   #     # SD add
@@ -739,6 +773,16 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
         rel_uncert_Bmed = acc_mean(a$rel_uncert_Bmed)
       )
     })
+
+    if (!is.null(acc_seasonal_ratios)) {
+      mean_seasonal_ratios <- list(
+        mean_iqr_JJA_over_DJF = acc_mean(acc_seasonal_ratios$mean_iqr_JJA_over_DJF),
+        mean_mu_JJA_over_DJF  = acc_mean(acc_seasonal_ratios$mean_mu_JJA_over_DJF)
+      )}
+      else {
+      mean_seasonal_ratios <- NULL
+    }
+
     # finalize SD (new)
     # annual_sd <- list(
     #   mean_mu   = acc_sd_finalize(acc_annual_sd$mean_mu),
@@ -763,6 +807,7 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
       interseasonal_mean = seasonal_mean,
  #     interannual_sd = annual_sd,
   #    interseasonal_sd = seasonal_sd,
+      mean_seasonal_ratios = mean_seasonal_ratios,
       variance_ref_list = variance_ref_list
     )
 }
@@ -790,4 +835,87 @@ get_common_color_scale <- function(fields, probs = NULL) {
 
   list(vmin = vmin, vmax = vmax, n = length(vals))
 
+}
+
+
+
+
+plot_interannual_sd_products <- function(res_thr, out_dir,xlim = c(480,840), ylim = c(60,300),cap_quant = 0.99, palette_end = 0.99) {
+
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  thr_txt <- gsub("\\.", "p", sprintf("%.2f", res_thr$threshold))
+
+  yr_min <- min(res_thr$years)
+  yr_max <- max(res_thr$years)
+
+  # -----------------------------
+  # ANNUAL SD
+  # -----------------------------
+
+  plot_cropped_field(res_thr$interannual_sd$mean_mu$sd,
+                     res_thr$variance_ref_list, xlim, ylim,
+                     title = sprintf("Interannual SD μ (%s–%s), thr=%.2f", yr_min, yr_max, res_thr$threshold),
+                     cap_quant = cap_quant, palette_end = palette_end,
+                     output_file = file.path(out_dir, sprintf("INTERANNUAL_SD_MU_thr_%s.png", thr_txt)))
+
+  plot_cropped_field(res_thr$interannual_sd$mean_iqr$sd,
+                     res_thr$variance_ref_list, xlim, ylim,
+                     title = sprintf("Interannual SD IQR(90-10), thr=%.2f",res_thr$threshold),
+                     cap_quant = cap_quant, palette_end = palette_end,
+                     output_file = file.path(out_dir,sprintf("INTERANNUAL_SD_IQR_thr_%s.png", thr_txt)))
+
+  plot_cropped_field(res_thr$interannual_sd$accum_mu$sd,
+                     res_thr$variance_ref_list, xlim, ylim,
+                     title = sprintf("Interannual SD accumulation (mm), thr=%.2f",res_thr$threshold),
+                     cap_quant = cap_quant, palette_end = palette_end,
+                     output_file = file.path(out_dir,sprintf("INTERANNUAL_SD_ACCUM_thr_%s.png", thr_txt)))
+
+  plot_cropped_field(res_thr$interannual_sd$wet_hours$sd,
+                     res_thr$variance_ref_list, xlim, ylim,
+                     title = sprintf("Interannual SD wet hours, thr=%.2f",res_thr$threshold),
+                     cap_quant = cap_quant, palette_end = palette_end,
+                     output_file = file.path(out_dir,sprintf("INTERANNUAL_SD_WETHOURS_thr_%s.png", thr_txt)))
+
+  # -----------------------------
+  # SEASONAL SD
+  # -----------------------------
+
+  for (s in names(res_thr$interseasonal_sd)) {
+
+    ss_sd <- res_thr$interseasonal_sd[[s]]
+
+    plot_cropped_field(ss_sd$mean_mu$sd,
+                       res_thr$variance_ref_list, xlim, ylim,
+                       title = sprintf("%s interannual SD μ, thr=%.2f",
+                                       s, res_thr$threshold),
+                       cap_quant = cap_quant, palette_end = palette_end,
+                       output_file = file.path(out_dir,
+                         sprintf("INTERSEASON_%s_SD_MU_thr_%s.png", s, thr_txt)))
+
+    plot_cropped_field(ss_sd$mean_iqr$sd,
+                       res_thr$variance_ref_list, xlim, ylim,
+                       title = sprintf("%s interannual SD IQR, thr=%.2f",
+                                       s, res_thr$threshold),
+                       cap_quant = cap_quant, palette_end = palette_end,
+                       output_file = file.path(out_dir,
+                         sprintf("INTERSEASON_%s_SD_IQR_thr_%s.png", s, thr_txt)))
+
+    plot_cropped_field(ss_sd$accum_mu$sd,
+                       res_thr$variance_ref_list, xlim, ylim,
+                       title = sprintf("%s interannual SD accumulation, thr=%.2f",
+                                       s, res_thr$threshold),
+                       cap_quant = cap_quant, palette_end = palette_end,
+                       output_file = file.path(out_dir,
+                         sprintf("INTERSEASON_%s_SD_ACCUM_thr_%s.png", s, thr_txt)))
+
+    plot_cropped_field(ss_sd$wet_hours$sd,
+                       res_thr$variance_ref_list, xlim, ylim,
+                       title = sprintf("%s interannual SD wet hours, thr=%.2f",
+                                       s, res_thr$threshold),
+                       cap_quant = cap_quant, palette_end = palette_end,
+                       output_file = file.path(out_dir,
+                         sprintf("INTERSEASON_%s_SD_WETHOURS_thr_%s.png", s, thr_txt)))
+  }
+
+  invisible(TRUE)
 }
