@@ -506,8 +506,13 @@ compute_iqr_list <- function(kriging_raw_list, variance_raw_list) {
          SIMPLIFY = FALSE)
 }
 
+safe_div <- function(num, den, eps = 1e-6) {
+  out <- ifelse(is.na(den) | abs(den) < eps, NA_real_, num / den)
+  out[!is.finite(out)] <- NA_real_
+  out
+  }
 
-compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_threshold = Inf, mu_min = 0.1, rel_uncert_method = c("A", "B_median","B_IQR")) {
+compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_threshold = Inf, mu_min = 0.1, rel_uncert_method = c("B_median","B_IQR")) {
 
   rel_uncert_method <- match.arg(rel_uncert_method)
   load(rda_file)  # expects: kriging_crop_list, variance_crop_list, timestamps
@@ -534,23 +539,25 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
   iqr_list <- compute_iqr_list(kriging_thr_list, variance_raw_list)
   annual_mean_iqr <- aggregate_mean(iqr_list)$mean
   
-  ### Relative uncertainty ##
 
-  # Option B (median of hourly ratios)
-  annual_rel_Bmed <- aggregate_rel_uncert_B(
-    mu_list   = kriging_thr_list,
-    iqr_list  = iqr_list,
-    mu_min    = mu_min,
-    method    = "median",
-    min_hours = 20
-  )
+ # Annual relative uncertainty (method-dependent)
+  annual_rel_uncert <- if (rel_uncert_method == "B_median") {
+    aggregate_rel_uncert_B(
+      mu_list   = kriging_thr_list,
+      iqr_list  = iqr_list,
+      mu_min    = mu_min,
+      method    = "median",
+      min_hours = 20
+    )
+  } else {
+    aggregate_rel_uncert_iqr(
+      mu_list   = kriging_thr_list,
+      iqr_list  = iqr_list,
+      mu_min    = mu_min,
+      min_hours = 10
+    )
+  }
 
-  annual_rel_B_iqr <- aggregate_rel_uncert_iqr(
-  mu_list   = kriging_thr_list,
-  iqr_list  = iqr_list,
-  mu_min    = mu_min,
-  min_hours = 10
-  )
 # Seasonal fields
   seasons  <- levels(season)
   seasonal <- setNames(vector("list", length(seasons)), seasons)
@@ -593,12 +600,6 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
     )
   }
 
-  safe_div <- function(num, den, eps = 1e-6) {
-  out <- ifelse(is.na(den) | abs(den) < eps, NA_real_, num / den)
-  out[!is.finite(out)] <- NA_real_
-  out
-  }
-
   seasonal_ratios <- NULL
   if (all(c("JJA", "DJF") %in% names(seasonal))) {
     seasonal_ratios <- list(
@@ -624,7 +625,7 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
     annual = list(
       mean_mu    = annual_mean_mu,
       mean_iqr   = annual_mean_iqr,
-      rel_uncert_B_median  = annual_rel_Bmed,
+      rel_uncert_B_median  = annual_rel_uncert,
  #     iqr_relative_uncertainty = annual_rel_B_iqr,
       accum_mu   = annual_accum_mu,
       wet_hours  = annual_wet_hours
