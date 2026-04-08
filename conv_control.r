@@ -280,7 +280,6 @@ result <- nearest_grid(
 
 
 
-
 # ── The connection is through: station_id + timestamp ─────────────────────────
 
 # You have:
