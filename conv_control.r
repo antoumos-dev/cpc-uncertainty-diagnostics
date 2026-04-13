@@ -32,7 +32,9 @@ setwd("/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/")
 
 project_root <- "/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats"
 utils_file   <- file.path(project_root, "R", "utils.r")
+plot_utils_file <- file.path(project_root,"R","plot_utils.r")
 source(utils_file) # helpers function
+source(plot_utils_file) # plot helpers function
 
 
 rda_files <- list.files(pattern = "CPC23.*\\.rda$") 
@@ -252,7 +254,7 @@ nearest_grid <- function(
       dist       = dist,
       time       = time_vec,
       mu         = mu_thr,
-      iqr        = iqr_vals
+      iqr        = as.numeric(unlist(iqr_vals)) 
     )
     
     if (i %% 50 == 0) cat(sprintf("Progress: %d / %d stations\n", i, n_stations))
@@ -279,7 +281,6 @@ result <- nearest_grid(
 )
 
 
-
 # ── The connection is through: station_id + timestamp ─────────────────────────
 
 # You have:
@@ -287,18 +288,18 @@ result <- nearest_grid(
 # result          → station_id, time, mu, iqr    (per station per timestep)
 # all_data        → coef.var per station per timestep
 
-# ── 1. Add coef.var to the result dataframe ────────────────────────────────────
+# Add coef.var to the result dataframe ────────────────────────────────────
 # Build a long format coef.var dataframe
-coefvar_long <- do.call(rbind, lapply(seq_along(all_data), function(i) {
+coefvar_long <- rbindlist(lapply(seq_along(all_data), function(i) {
   df <- all_data[[i]]
-  data.frame(
+  data.table(
     station_id = seq_len(nrow(df)),
     time       = dates[i],
     coef.var   = df$coef.var
   )
 }))
 
-# ── 2. Merge with result (mu, iqr) ────────────────────────────────────────────
+#  Merge with result (mu, iqr) ────────────────────────────────────────────
 result_full <- merge(result, coefvar_long, by = c("station_id", "time"))
 
 # ── 3. Flag active vs non-active ──────────────────────────────────────────────
@@ -319,20 +320,97 @@ cat("── iqr when convective control NOT active ──\n")
 print(summary(result_full$iqr[result_full$active == FALSE]))
 
 # ── 5. Per station: how does mu differ when active vs not ─────────────────────
-station_comparison <- do.call(rbind, lapply(1:275, function(s) {
-  sub    <- result_full[result_full$station_id == s, ]
-  active <- sub[sub$active == TRUE,  ]
-  noact  <- sub[sub$active == FALSE, ]
-  data.frame(
-    station_id   = s,
-    x            = sub$x_station[1],
-    y            = sub$y_station[1],
-    n_active     = nrow(active),
-    mean_mu_active   = mean(active$mu,  na.rm = TRUE),
-    mean_mu_inactive = mean(noact$mu,   na.rm = TRUE),
-    mean_iqr_active  = mean(active$iqr, na.rm = TRUE),
-    mean_iqr_inactive= mean(noact$iqr,  na.rm = TRUE)
-  )
-}))
+station_comparison <- result_full[!is.na(mu), .(
+  x                 = x_station[1],
+  y                 = y_station[1],
+  n_active          = sum(active == TRUE,  na.rm = TRUE),
+  n_inactive        = sum(active == FALSE, na.rm = TRUE),
+  mean_mu_active    = mean(mu[active == TRUE],   na.rm = TRUE),
+  mean_mu_inactive  = mean(mu[active == FALSE],  na.rm = TRUE),
+  mean_iqr_active   = mean(iqr[active == TRUE],  na.rm = TRUE),
+  mean_iqr_inactive = mean(iqr[active == FALSE], na.rm = TRUE)
+), by = station_id]
 
 print(summary(station_comparison))
+
+################################  spatial representation   ###################################################
+
+# ── Prepare data: one row per station with total activations ──────────────────
+
+station_activations <- station_comparison[, .(
+  station_id,
+  x,
+  y,
+  n_active,
+  n_inactive,
+  activation_rate = n_active/ (n_active + n_inactive) # fraction of wet hours active
+)]
+
+# ── Plot ───────────────────────────────────────────────────────────────────────
+png(filename = "topography_activations_2023.png", 
+    width = 650, height = 650, units = "px", pointsize = 18)
+
+plot(1, type = "n", xlim = c(320, 900), ylim = c(-140, 450),
+    xlab = "Swiss easting (km)", ylab = "Swiss northing (km)",
+     main = "Convective Control Activations 2023", asp = 1)
+
+# Add topography
+rasterImage(dem.fixed, 255, -165, 965, 480)
+
+# Add Switzerland border
+plot(Switzerland, add = TRUE, border = "white", lwd = 2.2)
+
+# ── Color scale ────────────────────────────────────────────────────────────────
+n_colors   <- 100
+colormap   <- heat.colors(n_colors)
+val_range  <- range(station_activations$n_active, na.rm = TRUE)
+color_idx  <- cut(station_activations$n_active, 
+                  breaks = seq(val_range[1], val_range[2], length.out = n_colors + 1),
+                  labels = FALSE, include.lowest = TRUE)
+color_idx[is.na(color_idx)] <- 1
+
+# Add station points
+points(station_activations$x, station_activations$y,
+       pch = 21, bg = colormap[color_idx],
+       cex = 0.8)
+
+# ── Legend ─────────────────────────────────────────────────────────────────────
+legend_vals   <- pretty(val_range, n = 5)
+legend_colors <- colormap[cut(legend_vals, 
+                              breaks = seq(val_range[1], val_range[2], 
+                                           length.out = n_colors + 1),
+                              labels = FALSE, include.lowest = TRUE)]
+
+x_left   <- 310;  x_right  <- 320
+y_bottom <- 100;  y_top    <- 300
+legend_height <- y_top - y_bottom
+step_height   <- legend_height / length(legend_colors)
+
+for (i in seq_along(legend_colors)) {
+  rect(x_left,  y_bottom + (i - 1) * step_height,
+       x_right, y_bottom + i       * step_height,
+       col = legend_colors[i], border = NA)
+}
+
+label_pos <- seq(y_bottom, y_top, length.out = length(legend_vals))
+text(x = x_right + 5, y = label_pos, 
+     labels = round(legend_vals, 2), pos = 4, cex = 0.6)
+text(x = x_left + 5,  y = y_top + 15, 
+     labels = "N activations", pos = 3, cex = 0.7)
+
+dev.off()
+
+
+
+
+
+########## New Ideas ############
+
+  ratio_mu         = mean_mu_active  / mean_mu_inactive,   # relative difference
+  ratio_iqr        = mean_iqr_active / mean_iqr_inactive,
+
+# Does the convective correction improve or worsen with intensity?
+# i.e. is ratio_mu correlated with ratio_iqr spatially?
+cor(station_activations$ratio_mu, 
+    station_activations$ratio_iqr, 
+    use = "complete.obs")
