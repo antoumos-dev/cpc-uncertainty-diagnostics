@@ -58,7 +58,7 @@ utils_file   <- file.path(project_root, "R", "utils.r")
 
 rda_file <- file.path(
   data_root,
-  sprintf("precip_transformed_results_new_%s.rda", year)
+  sprintf("precip_transformed_results_conv_off_new_%s.rda", year)
 )
 
 message("Using input file: ", rda_file)
@@ -68,7 +68,9 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 
 .libPaths(lib_root)
-source(utils_file) # helpers function
+plot_utils_file <- file.path(project_root, "R", "plot_utils.r")
+source(utils_file)      # helpers function
+source(plot_utils_file) # plotting functions
 
 suppressPackageStartupMessages({
   library(matrixStats)
@@ -232,7 +234,10 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
 
   for (lab in names(variants)) {
     key <- variants[[lab]]
-    if (is.null(obj[[key]])) next
+    if (is.null(obj[[key]])) {
+      warning("plot_relunc_variants: '", key, "' is NULL, skipping plot")
+      next
+    }
 
     s_tag <- if (!is.null(season_name)) paste0("SEASON_", season_name, "_") else "ANNUAL_"
     ttl_season <- if (!is.null(season_name)) paste0(" ", season_name) else " annual"
@@ -314,7 +319,7 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
 # -----------------------------
 
 # Plot / compute options
-mode   <- "relunc"     # "all" or "relunc"
+mode   <- "all"     # "all" or "relunc"
 mu_min <- 0.1       # mask for tiny mu in relunc
 
 thresholds <- c(0.1)  # can be c(0.1, 0.5, 1.0) etc
@@ -324,6 +329,8 @@ thresholds <- c(0.1)  # can be c(0.1, 0.5, 1.0) etc
 # # RUN
 # # -----------------------------
 stopifnot(file.exists(rda_file))
+
+out_dir <- ("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/conv_off_figures/")
 
 message("Running year=", year, " file=", rda_file)
 message("Mode=", mode, " | mu_min=", mu_min)
