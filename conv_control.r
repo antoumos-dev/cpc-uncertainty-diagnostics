@@ -1,4 +1,3 @@
-library(raster)
 .libPaths("/store_new/mch/msclim/share/CATs/cats/lib-R4.4.0/")
 #library(mchdwh)
 library(geocors)                
@@ -28,7 +27,7 @@ library(data.table)
 
 
 
-setwd("/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/")
+setwd("/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/conv_control_off/")
 
 project_root <- "/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats"
 utils_file   <- file.path(project_root, "R", "utils.r")
@@ -75,7 +74,7 @@ names(all_data) <- format(dates, "%Y-%m-%d %H:%M") ### add dates as a character 
 
 ### save all-data 
 
-saveRDS(all_data, file = "../new_project/out_stats/all_data_2023.rds")
+saveRDS(all_data, file = "../new_project/out_stats/all_data_conv_off_2023.rds")
 
 setwd("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats")
 
@@ -167,108 +166,9 @@ cat(sprintf("True weighted mean correction: %.4f\n", true_overall_abs_mean))
 
 
 ######## Connection with Kriging variance #####
-
 #### Expected value + Variance timeseries ###
 
-nearest_grid <- function(
-  rda_file,
-  station_coords,
-  mu_min= 0.1
-) {
-
-  load(rda_file)
-
-  if (!exists("kriging_crop_list")) stop("kriging_crop_list not found in rda_file")
-  if (!exists("variance_crop_list")) stop("variance_crop_list not found in rda_file")
-
-  # ── 2. Get grid coordinate vectors from reference matrix ─────────────────────
-
-  ref <- kriging_crop_list[[1]]
-    
-  get_xy_from_matrix <- function(mat) {
-    x <- attr(mat, "x")
-    y <- attr(mat, "y")
-
-    # fallback options if attrs are missing
-    if (is.null(x) && !is.null(colnames(mat))) {
-      suppressWarnings(x <- as.numeric(colnames(mat)))
-    }
-    if (is.null(y) && !is.null(rownames(mat))) {
-      suppressWarnings(y <- as.numeric(rownames(mat)))
-    }
-
-    if (is.null(x) || is.null(y)) {
-      stop("Could not find x/y coordinates in matrix attributes or dimnames.")
-    }
-
-    list(x = x, y = y)
-  }
-
-  xy <- get_xy_from_matrix(ref)
-  x_vec <- xy$x
-  y_vec <- xy$y
-
-  # ── 3. Time vector ─────────────────────────────────────────────────────────────
-  if (exists("timestamps")) {
-    time_vec <- as.POSIXct(timestamps, origin = "1970-01-01", tz = "UTC")
-  } else {
-    time_vec <- seq_along(kriging_crop_list)
-  }
-
-  # ── 4. Loop over all stations ──────────────────────────────────────────────────
-  
-  n_stations <- nrow(station_coords)
-  results    <- vector("list", n_stations)
-  
-  for (i in seq_len(n_stations)) {
-    
-    target_x <- station_coords[i, 1]
-    target_y <- station_coords[i, 2]
-    
-    # ── 5. Find nearest grid point ───────────────────────────────────────────────
-    ix <- which.min(abs(x_vec - target_x))
-    iy <- which.min(abs(y_vec - target_y))
-    
-    nearest_x <- x_vec[ix]
-    nearest_y <- y_vec[iy]
-    dist      <- sqrt((nearest_x - target_x)^2 + (nearest_y - target_y)^2)
-    
-    # ── 6. Extract mu and variance time series at this grid point ────────────────
-    mu_raw  <- sapply(kriging_crop_list,  function(m) m[ix, iy])  # note: row=y col=x
-    var_raw <- sapply(variance_crop_list, function(v) v[ix, iy])
-    
-    # ── 7. Apply mu threshold ────────────────────────────────────────────────────
-    mu_thr <- mu_raw
-    mu_thr[mu_thr < mu_min] <- NA_real_
-    
-    # ── 8. Compute IQR ───────────────────────────────────────────────────────────
-    iqr_vals <- compute_iqr_list(mu_thr, var_raw)
-    
-    # ── 9. Store result for this station ─────────────────────────────────────────
-    results[[i]] <- data.table(
-      station_id = i,
-      x_station  = target_x,
-      y_station  = target_y,
-      x_grid     = nearest_x,
-      y_grid     = nearest_y,
-      dist       = dist,
-      time       = time_vec,
-      mu         = mu_thr,
-      iqr        = as.numeric(unlist(iqr_vals)) 
-    )
-    
-    if (i %% 50 == 0) cat(sprintf("Progress: %d / %d stations\n", i, n_stations))
-  }
-
-  cat("Combining results...\n")
-  t1     <- Sys.time()
-  out_dt <- rbindlist(results)
-  t2     <- Sys.time()
-  cat(sprintf("Done. Rows: %d  Cols: %d  Time: %.1f sec\n", 
-              nrow(out_dt), ncol(out_dt), as.numeric(t2 - t1)))
-  return(out_dt)
-
-}
+## nearest_grid() and get_xy_from_matrix() are defined in R/utils.r
 
 # ── Call the function ──────────────────────────────────────────────────────────
 load("/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/CPC2300100002.rda")
@@ -343,8 +243,31 @@ station_activations <- station_comparison[, .(
   y,
   n_active,
   n_inactive,
-  activation_rate = n_active/ (n_active + n_inactive) # fraction of wet hours active
+  activation_rate = n_active/ (n_active + n_inactive) ,# fraction of wet hours active
+
+ # ── intensity difference ──────────────────────────────────────────────────
+  delta_mu         = mean_mu_active  - mean_mu_inactive,   # absolute difference
+  delta_iqr        = mean_iqr_active - mean_iqr_inactive,
+  ratio_mu         = mean_mu_active  / mean_mu_inactive,   # relative difference
+  ratio_iqr        = mean_iqr_active / mean_iqr_inactive,
+
+  # ── uncertainty relative to intensity ─────────────────────────────────────
+  cv_active        = mean_iqr_active  / mean_mu_active,    # IQR/mu when active
+  cv_inactive      = mean_iqr_inactive / mean_mu_inactive  # IQR/mu when inactive
+
 )]
+
+#### higher intensity correlated with higher uncertainty? ####
+r <- cor(station_activations$ratio_mu,
+         station_activations$ratio_iqr,
+         use    = "complete.obs",
+         method = "spearman")
+cat(sprintf("Spearman r = %.3f\n", r))
+
+## Significance testing - IDR/mu ##
+
+wilcox.test(station_activations$cv_active, station_activations$cv_inactive, conf.int = TRUE )
+
 
 # ── Plot ───────────────────────────────────────────────────────────────────────
 png(filename = "topography_activations_2023.png", 
@@ -355,9 +278,11 @@ plot(1, type = "n", xlim = c(320, 900), ylim = c(-140, 450),
      main = "Convective Control Activations 2023", asp = 1)
 
 # Add topography
+# NOTE: dem.fixed must be loaded beforehand (e.g. from plot_utils.r or a separate load())
 rasterImage(dem.fixed, 255, -165, 965, 480)
 
 # Add Switzerland border
+# NOTE: Switzerland (SpatialPolygons) must be loaded beforehand
 plot(Switzerland, add = TRUE, border = "white", lwd = 2.2)
 
 # ── Color scale ────────────────────────────────────────────────────────────────
@@ -403,14 +328,122 @@ dev.off()
 
 
 
+########## log-log regression ############
+############# Does intensity increases faster than uncertainty during convection ########
 
-########## New Ideas ############
+# ── 1. Prepare data ────────────────────────────────────────────────────────────
+# Use filtered stations (n_active >= 10) to remove unreliable estimates
+reg_data <- station_comparison[ 
+                                 !is.na(station_comparison$mean_mu_active) & 
+                                 !is.na(station_comparison$mean_iqr_active)]
 
-  ratio_mu         = mean_mu_active  / mean_mu_inactive,   # relative difference
-  ratio_iqr        = mean_iqr_active / mean_iqr_inactive,
+# Log transform
+reg_data[, log_mu  := log(station_comparison$mean_mu_active)]
+reg_data[, log_iqr := log(station_comparison$mean_iqr_active)]
 
-# Does the convective correction improve or worsen with intensity?
-# i.e. is ratio_mu correlated with ratio_iqr spatially?
-cor(station_activations$ratio_mu, 
-    station_activations$ratio_iqr, 
-    use = "complete.obs")
+fit_inactive <- lm(log(station_comparison$mean_iqr_inactive) ~ log(station_comparison$mean_mu_inactive), 
+                   data = reg_data)
+
+
+# ── 2. Log-log regression ──────────────────────────────────────────────────────
+fit <- lm(log_iqr ~ log_mu, data = reg_data)
+summary(fit)
+
+
+# Log-log regression: slope = elasticity
+fit <- lm(log(mean_iqr_active) ~ log(mean_mu_active), 
+          data = station_activations_filtered)
+summary(fit)
+
+
+# Stack active and inactive together with a flag
+reg_combined <- data.table(
+  log_mu  = c(log(reg_data$mean_mu_active), 
+              log(station_comparison$mean_mu_inactive)),
+  log_iqr = c(log(reg_data$mean_iqr_active),  
+              log(station_comparison$mean_iqr_inactive)),
+  active  = c(rep(1, nrow(reg_data)), 
+              rep(0, nrow(reg_data)))
+)
+
+# Does the IQR/mu relationship differ between active and inactive?
+fit_combined <- lm(log_iqr ~ log_mu * active, data = reg_combined)
+summary(fit_combined)
+
+
+######### Plot ##########
+
+# ── Data for regression lines ──────────────────────────────────────────────────
+mu_range <- seq(min(reg_combined$log_mu), 
+                max(reg_combined$log_mu), 
+                length.out = 100)
+
+# Predicted lines from fit_combined
+pred_inactive <- coef(fit_combined)["(Intercept)"] + 
+                 coef(fit_combined)["log_mu"] * mu_range
+
+pred_active   <- (coef(fit_combined)["(Intercept)"] + coef(fit_combined)["active"]) + 
+                 (coef(fit_combined)["log_mu"]       + coef(fit_combined)["log_mu:active"]) * mu_range
+
+# ── Plot ───────────────────────────────────────────────────────────────────────
+png("loglog_active_vs_inactive.png", width = 650, height = 600, 
+    units = "px", pointsize = 14)
+
+plot(NULL, 
+     xlim = range(reg_combined$log_mu),
+     ylim = range(reg_combined$log_iqr),
+     xlab = "log(mu)  —  log precipitation intensity",
+     ylab = "log(IQR)  —  log uncertainty",
+     main = "IQR vs mu scaling: active vs inactive")
+
+# ── Points ─────────────────────────────────────────────────────────────────────
+points(reg_combined$log_mu[reg_combined$active == 0],
+       reg_combined$log_iqr[reg_combined$active == 0],
+       pch = 21, bg = "steelblue", col = "steelblue", 
+       cex = 0.7, alpha = 0.5)
+
+points(reg_combined$log_mu[reg_combined$active == 1],
+       reg_combined$log_iqr[reg_combined$active == 1],
+       pch = 21, bg = "tomato", col = "tomato", 
+       cex = 0.7)
+
+# ── Regression lines ───────────────────────────────────────────────────────────
+lines(mu_range, pred_inactive, col = "steelblue", lwd = 2.5)
+lines(mu_range, pred_active,   col = "tomato",    lwd = 2.5)
+
+# ── Reference line slope = 1 ──────────────────────────────────────────────────
+abline(a = coef(fit_combined)["(Intercept)"], b = 1, 
+       col = "gray50", lwd = 1.5, lty = 2)
+
+# ── Intercept shift annotation ────────────────────────────────────────────────
+# Draw vertical arrow showing the -0.253 shift at a mid-range mu value
+x_ann  <- median(mu_range)
+y_top  <- coef(fit_combined)["(Intercept)"] + 
+          coef(fit_combined)["log_mu"] * x_ann
+y_bot  <- (coef(fit_combined)["(Intercept)"] + coef(fit_combined)["active"]) + 
+          (coef(fit_combined)["log_mu"] + coef(fit_combined)["log_mu:active"]) * x_ann
+
+arrows(x_ann + 0.05, y_top, x_ann + 0.05, y_bot,
+       length = 0.08, code = 3, col = "black", lwd = 1.5)
+text(x_ann + 0.12, (y_top + y_bot) / 2, 
+     labels = sprintf("Δ = %.3f", coef(fit_combined)["active"]),
+     cex = 0.8, adj = 0)
+
+# ── Legend ─────────────────────────────────────────────────────────────────────
+legend("topleft",
+       legend = c(
+         sprintf("inactive  ε=%.3f", coef(fit_combined)["log_mu"]),
+         sprintf("active    ε=%.3f", coef(fit_combined)["log_mu"] + 
+                                     coef(fit_combined)["log_mu:active"]),
+         "reference ε=1"
+       ),
+       col = c("steelblue", "tomato", "gray50"),
+       lwd = c(2.5, 2.5, 1.5),
+       lty = c(1, 1, 2),
+       pch = c(21, 21, NA),
+       pt.bg = c("steelblue", "tomato", NA),
+       cex  = 0.85)
+
+dev.off()
+
+
