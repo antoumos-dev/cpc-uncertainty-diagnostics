@@ -920,3 +920,89 @@ plot_interannual_sd_products <- function(res_thr, out_dir,xlim = c(480,840), yli
 
   invisible(TRUE)
 }
+
+# --------------------------
+# Grid coordinate extraction
+# --------------------------
+get_xy_from_matrix <- function(mat) {
+  x <- attr(mat, "x")
+  y <- attr(mat, "y")
+
+  if (is.null(x) && !is.null(colnames(mat)))
+    suppressWarnings(x <- as.numeric(colnames(mat)))
+  if (is.null(y) && !is.null(rownames(mat)))
+    suppressWarnings(y <- as.numeric(rownames(mat)))
+
+  if (is.null(x) || is.null(y))
+    stop("Could not find x/y coordinates in matrix attributes or dimnames.")
+
+  list(x = x, y = y)
+}
+
+# --------------------------
+# Nearest-grid extraction per station
+# --------------------------
+nearest_grid <- function(rda_file, station_coords, mu_min = 0.1) {
+  if (!requireNamespace("data.table", quietly = TRUE))
+    stop("nearest_grid requires the data.table package")
+
+  load(rda_file)
+
+  if (!exists("kriging_crop_list"))  stop("kriging_crop_list not found in rda_file")
+  if (!exists("variance_crop_list")) stop("variance_crop_list not found in rda_file")
+
+  xy      <- get_xy_from_matrix(kriging_crop_list[[1]])
+  x_vec   <- xy$x
+  y_vec   <- xy$y
+
+  time_vec <- if (exists("timestamps")) {
+    as.POSIXct(timestamps, origin = "1970-01-01", tz = "UTC")
+  } else {
+    seq_along(kriging_crop_list)
+  }
+
+  n_stations <- nrow(station_coords)
+  results    <- vector("list", n_stations)
+
+  for (i in seq_len(n_stations)) {
+    target_x <- station_coords[i, 1]
+    target_y <- station_coords[i, 2]
+
+    ix <- which.min(abs(x_vec - target_x))
+    iy <- which.min(abs(y_vec - target_y))
+
+    nearest_x <- x_vec[ix]
+    nearest_y <- y_vec[iy]
+    dist      <- sqrt((nearest_x - target_x)^2 + (nearest_y - target_y)^2)
+
+    mu_raw  <- sapply(kriging_crop_list,  function(m) m[ix, iy])
+    var_raw <- sapply(variance_crop_list, function(v) v[ix, iy])
+
+    mu_thr <- mu_raw
+    mu_thr[mu_thr < mu_min] <- NA_real_
+
+    iqr_vals <- compute_iqr_list(mu_thr, var_raw)
+
+    results[[i]] <- data.table::data.table(
+      station_id = i,
+      x_station  = target_x,
+      y_station  = target_y,
+      x_grid     = nearest_x,
+      y_grid     = nearest_y,
+      dist       = dist,
+      time       = time_vec,
+      mu         = mu_thr,
+      iqr        = as.numeric(unlist(iqr_vals))
+    )
+
+    if (i %% 50 == 0) cat(sprintf("Progress: %d / %d stations\n", i, n_stations))
+  }
+
+  cat("Combining results...\n")
+  t1     <- Sys.time()
+  out_dt <- data.table::rbindlist(results)
+  t2     <- Sys.time()
+  cat(sprintf("Done. Rows: %d  Cols: %d  Time: %.1f sec\n",
+              nrow(out_dt), ncol(out_dt), as.numeric(t2 - t1)))
+  out_dt
+}
