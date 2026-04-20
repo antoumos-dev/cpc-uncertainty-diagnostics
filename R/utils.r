@@ -73,17 +73,13 @@ aggregate_mean <- function(field_list) {
   list(mean = out, n_valid = n)
 }
 
-aggregate_wet_hours <- function(field_list, min_threshold, max_threshold = Inf) {
-  # counts timesteps where min_threshold < field <= max_threshold (per pixel)
+aggregate_wet_hours <- function(field_list, max_threshold = Inf) {
+  # counts timesteps where field is finite (threshold already applied upstream) and <= max_threshold
 
-  ny <- nrow(field_list[[1]])
-  nx <- ncol(field_list[[1]])
-
-  wh <- matrix(0L, ny, nx)
+  wh <- matrix(0L, nrow(field_list[[1]]), ncol(field_list[[1]]))
 
   for (x in field_list) {
-    ok <- is.finite(x)
-    cond <- ok & x > min_threshold & x <= max_threshold
+    cond <- is.finite(x) & x <= max_threshold
     wh[cond] <- wh[cond] + 1L
   }
 
@@ -350,7 +346,7 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
   # Annual fields
   annual_mean_mu   <- aggregate_mean(kriging_thr_list)$mean
   annual_accum_mu  <- aggregate_sum(kriging_thr_list)$sum  # hourly sums = mm
-  annual_wet_hours <- aggregate_wet_hours(kriging_thr_list, min_threshold, max_threshold)
+  annual_wet_hours <- aggregate_wet_hours(kriging_thr_list, max_threshold)
 
   iqr_list <- compute_iqr_list(kriging_thr_list, variance_raw_list)
   annual_mean_iqr <- aggregate_mean(iqr_list)$mean
@@ -386,7 +382,7 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
 
     s_mean_mu   <- aggregate_mean(s_mu_list)$mean
     s_accum_mu  <- aggregate_sum(s_mu_list)$sum
-    s_wet_hours <- aggregate_wet_hours(s_mu_list, min_threshold, max_threshold)
+    s_wet_hours <- aggregate_wet_hours(s_mu_list, max_threshold)
     s_mean_iqr  <- aggregate_mean(s_iqr_list)$mean
     
 # Option B median
@@ -630,8 +626,6 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
 }
   out
 }
-
-#### For plotting ####
 
 # get_common_color_scale, plot_interannual_sd_products → moved to R/plot_utils.r
 
