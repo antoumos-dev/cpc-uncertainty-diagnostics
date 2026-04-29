@@ -129,6 +129,7 @@ plot_cropped_field <- function(
   cap_quant = 0.99,
   palette_end = 0.99,
   n_colors = 150,
+  pal = NULL,
   title = "Cropped Field",
   xlab = "Swiss easting (km)",
   ylab = "Swiss northing (km)",
@@ -161,7 +162,7 @@ plot_cropped_field <- function(
   cat(sprintf("%s | crop range: [%.3f, %.3f] | scale: [%.3f, %.3f]\n",
               title, min(Z_crop, na.rm = TRUE), max(Z_crop, na.rm = TRUE), vmin, vmax))
 
-  pal          <- viridisLite::viridis(n_colors, end = palette_end)
+  if (is.null(pal)) pal <- viridisLite::viridis(n_colors, end = palette_end)
   swiss_border <- load.map.elements(xlim = xlim, ylim = ylim)
 
   if (!is.null(output_file)) {

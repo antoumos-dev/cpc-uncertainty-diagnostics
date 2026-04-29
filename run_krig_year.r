@@ -61,6 +61,11 @@ rda_file <- file.path(
   sprintf("precip_transformed_results_conv_off_new_%s.rda", year)
 )
 
+rda_file_base <- file.path(
+  data_root,
+  sprintf("precip_transformed_results_new_%s.rda", year)
+)
+
 message("Using input file: ", rda_file)
 
 out_dir <- file.path(base_out_dir, paste0("year_", year))
@@ -314,6 +319,66 @@ plot_stats_simple <- function(res, year_label, out_dir, xlim, ylim,
   invisible(TRUE)
 }
 
+# -----------------------------
+# Difference plots (conv_off minus base)
+# -----------------------------
+plot_diff_stats <- function(res_off, res_base, year_label, out_dir, xlim, ylim,
+                             cap_quant = 0.99) {
+  thr_txt  <- gsub("\\.", "p", sprintf("%.2f", res_off$min_threshold))
+  vref     <- res_off$variance_ref_list
+  diff_pal <- colorRampPalette(rev(RColorBrewer::brewer.pal(11, "RdBu")))(150)
+
+  plot_diff <- function(Z_off, Z_base, fname, ttl) {
+    if (is.null(Z_off) || is.null(Z_base)) return(invisible(FALSE))
+    dZ   <- Z_off - Z_base
+    vmax <- quantile(abs(dZ), cap_quant, na.rm = TRUE)
+    vmax <- max(vmax, 1e-9)
+    plot_cropped_field(
+      Z             = dZ,
+      variance_list = vref,
+      xlim = xlim, ylim = ylim,
+      vmin = -vmax, vmax = vmax,
+      pal  = diff_pal,
+      title = ttl,
+      output_file = file.path(out_dir, fname)
+    )
+    invisible(TRUE)
+  }
+
+  fields <- list(
+    list(key = "mean_mu",             label = "mean μ",                 unit = "mm/h"),
+    list(key = "mean_iqr",            label = "mean IQR(90-10)",             unit = "mm/h"),
+    list(key = "accum_mu",            label = "accumulation",                unit = "mm"),
+    list(key = "wet_hours",           label = "wet hours",                   unit = "h"),
+    list(key = "rel_uncert_B_median", label = "rel. uncertainty (B_median)", unit = "")
+  )
+
+  for (f in fields) {
+    unit_str <- if (nchar(f$unit) > 0) paste0(" (", f$unit, ")") else ""
+    plot_diff(
+      res_off$annual[[f$key]], res_base$annual[[f$key]],
+      fname = sprintf("DIFF_ANNUAL_%s_%s_thr_%s.png", toupper(f$key), year_label, thr_txt),
+      ttl   = sprintf("%s annual DIFF conv_off-base %s%s, thr=%.2f",
+                      year_label, f$label, unit_str, res_off$min_threshold)
+    )
+  }
+
+  for (s in names(res_off$seasonal)) {
+    if (!s %in% names(res_base$seasonal)) next
+    for (f in fields) {
+      unit_str <- if (nchar(f$unit) > 0) paste0(" (", f$unit, ")") else ""
+      plot_diff(
+        res_off$seasonal[[s]][[f$key]], res_base$seasonal[[s]][[f$key]],
+        fname = sprintf("DIFF_SEASON_%s_%s_%s_thr_%s.png", s, toupper(f$key), year_label, thr_txt),
+        ttl   = sprintf("%s %s DIFF conv_off-base %s%s, thr=%.2f",
+                        year_label, s, f$label, unit_str, res_off$min_threshold)
+      )
+    }
+  }
+
+  invisible(TRUE)
+}
+
 # Interactive run config
 # -----------------------------
 
@@ -329,7 +394,7 @@ thresholds <- c(0.1)  # can be c(0.1, 0.5, 1.0) etc
 # # -----------------------------
 stopifnot(file.exists(rda_file))
 
-out_dir <- ("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/conv_off_figures/")
+out_dir <- ("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/")
 
 message("Running year=", year, " file=", rda_file)
 message("Mode=", mode, " | mu_min=", mu_min)
@@ -338,21 +403,43 @@ message("Plots -> ", normalizePath(out_dir, mustWork = FALSE))
 for (thr in thresholds) {
   message("Threshold: ", thr)
 
-  res <- compute_year_threshold_stats_simple(
+  res_off <- compute_year_threshold_stats_simple(
     rda_file = rda_file,
     min_threshold = thr,
     mu_min = mu_min,
-    rel_uncert_method = "B_IQR"  
+    rel_uncert_method = "B_IQR"
   )
 
-  plot_stats_simple(
-    res = res,
-    year_label = year,
-    out_dir = out_dir,
-    xlim = xlim,
-    ylim = ylim,
-    mode = mode
-  )
+  #plot_stats_simple(
+  #  res = res_off,
+  #  year_label = year,
+  #  out_dir = out_dir,
+#xlim = xlim,
+  #  ylim = ylim,
+  #  mode = mode
+  #)
+
+  if (file.exists(rda_file_base)) {
+    message("Computing diff with base file: ", rda_file_base)
+
+    res_base <- compute_year_threshold_stats_simple(
+      rda_file = rda_file_base,
+      min_threshold = thr,
+      mu_min = mu_min,
+      rel_uncert_method = "B_IQR"
+    )
+
+    plot_diff_stats(
+      res_off    = res_off,
+      res_base   = res_base,
+      year_label = year,
+      out_dir    = out_dir,
+      xlim       = xlim,
+      ylim       = ylim
+    )
+  } else {
+    message("Base rda not found, skipping diff plots: ", rda_file_base)
+  }
 }
 
 message("Done.")
