@@ -90,7 +90,7 @@ for (i in seq_along(rda_files)) {
   cross_val_active[[i]] <- output[[6]]
   if (i %% 100 == 0) cat(sprintf("ON  Progress: %d / %d\n", i, length(rda_files)))
 }
-names(cross_val_active) <- format(dates, "%Y-%m-%d %H:%M")
+names(cross_val_active) <- format(dates, "%Y-%m-%d %H:%M") # add dates as names for easier reference
 saveRDS(cross_val_active, file = file.path(project_root, paste0("cross_val_active_20", YEAR, ".rds")))
 
 # conv control OFF
