@@ -1,0 +1,22 @@
+# --- Data (large binary, reproducible from source) ---
+*.rds
+data/
+
+# --- Generated outputs ---
+out_plots/
+diff_figures/
+conv_off_figures/
+*.png
+*.xlsx
+
+# --- SLURM logs ---
+slurm-*.out
+logs/
+
+# --- Accidental files ---
+git
+
+# --- R session artifacts ---
+.Rhistory
+.RData
+.Rproj.user/
