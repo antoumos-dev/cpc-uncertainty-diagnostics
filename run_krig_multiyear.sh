@@ -36,11 +36,11 @@ set -euo pipefail
 mkdir -p logs
 
 # Years
-START_YEAR=2016
-END_YEAR=2025
+START_YEAR=2021
+END_YEAR=2024
 
 # Thresholds
 
-THRESHOLD="0.1,1"
+THRESHOLD="0.1"
 
 srun Rscript run_krig_multiyear.r "$START_YEAR" "$END_YEAR" "$THRESHOLD" 

@@ -73,13 +73,17 @@ aggregate_mean <- function(field_list) {
   list(mean = out, n_valid = n)
 }
 
-aggregate_wet_hours <- function(field_list, max_threshold = Inf) {
-  # counts timesteps where field is finite (threshold already applied upstream) and <= max_threshold
+aggregate_wet_hours <- function(field_list, min_threshold, max_threshold = Inf) {
+  # counts timesteps where min_threshold < field <= max_threshold (per pixel)
 
-  wh <- matrix(0L, nrow(field_list[[1]]), ncol(field_list[[1]]))
+  ny <- nrow(field_list[[1]])
+  nx <- ncol(field_list[[1]])
+
+  wh <- matrix(0L, ny, nx)
 
   for (x in field_list) {
-    cond <- is.finite(x) & x <= max_threshold
+    ok <- is.finite(x)
+    cond <- ok & x > min_threshold & x <= max_threshold
     wh[cond] <- wh[cond] + 1L
   }
 
@@ -318,18 +322,33 @@ compute_iqr_list <- function(kriging_raw_list, variance_raw_list) {
          SIMPLIFY = FALSE)
 }
 
+compute_idr_points <- function(mu_orig, var_sqrt) {
+  z10 <- qnorm(0.10); z90 <- qnorm(0.90)
+  sigma   <- sqrt(pmax(var_sqrt, 0))
+  mu_sqrt <- sqrt(pmax(mu_orig - var_sqrt, 0))
+  q10 <- pmax(mu_sqrt + z10 * sigma, 0)^2
+  q90 <- pmax(mu_sqrt + z90 * sigma, 0)^2
+  q90 - q10
+}
+
 safe_div <- function(num, den, eps = 1e-6) {
   out <- ifelse(is.na(den) | abs(den) < eps, NA_real_, num / den)
   out[!is.finite(out)] <- NA_real_
   out
   }
 
-compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_threshold = Inf, mu_min = 0.1, rel_uncert_method = c("B_median","B_IQR")) {
+compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_threshold = Inf, mu_min = 0.1, rel_uncert_method = c("B_median","B_IQR"), subset_idx = NULL) {
 
   rel_uncert_method <- match.arg(rel_uncert_method)
   load(rda_file)  # expects: kriging_crop_list, variance_crop_list, timestamps
 
-  dates <- as.POSIXct(timestamps, origin = "1970-01-01", tz = "UTC")
+  if (!is.null(subset_idx)) {
+    kriging_crop_list  <- kriging_crop_list[subset_idx]
+    variance_crop_list <- variance_crop_list[subset_idx]
+    timestamps         <- timestamps[subset_idx]
+  }
+
+  dates <- as.POSIXct(as.numeric(timestamps), origin = "1970-01-01", tz = "UTC")
   season <- get_season(dates)
 
   # Keep a reference list WITH x/y for plotting
@@ -346,7 +365,7 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
   # Annual fields
   annual_mean_mu   <- aggregate_mean(kriging_thr_list)$mean
   annual_accum_mu  <- aggregate_sum(kriging_thr_list)$sum  # hourly sums = mm
-  annual_wet_hours <- aggregate_wet_hours(kriging_thr_list, max_threshold)
+  annual_wet_hours <- aggregate_wet_hours(kriging_thr_list, min_threshold, max_threshold)
 
   iqr_list <- compute_iqr_list(kriging_thr_list, variance_raw_list)
   annual_mean_iqr <- aggregate_mean(iqr_list)$mean
@@ -382,7 +401,7 @@ compute_year_threshold_stats_simple <- function(rda_file, min_threshold, max_thr
 
     s_mean_mu   <- aggregate_mean(s_mu_list)$mean
     s_accum_mu  <- aggregate_sum(s_mu_list)$sum
-    s_wet_hours <- aggregate_wet_hours(s_mu_list, max_threshold)
+    s_wet_hours <- aggregate_wet_hours(s_mu_list, min_threshold, max_threshold)
     s_mean_iqr  <- aggregate_mean(s_iqr_list)$mean
     
 # Option B median
@@ -627,6 +646,63 @@ compute_interannual_stats <- function(years, thresholds,rda_pattern = "/store_ne
   out
 }
 
+compute_interannual_mad_accum <- function(
+    years,
+    thresholds,
+    rda_pattern_off = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_conv_off_new_%s.rda",
+    rda_pattern_on  = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_new_%s.rda",
+    mu_min = 0.1) {
+
+  out <- vector("list", length(thresholds))
+  names(out) <- as.character(thresholds)
+
+  for (thr in thresholds) {
+    message("=== MAD accum_mu, threshold ", thr, " ===")
+    variance_ref_list <- NULL
+    acc_annual <- NULL
+    acc_season <- NULL
+
+    for (yr in years) {
+      rda_off <- sprintf(rda_pattern_off, yr)
+      rda_on  <- sprintf(rda_pattern_on,  yr)
+      if (!file.exists(rda_off) || !file.exists(rda_on)) {
+        warning("Missing file(s) for year ", yr, ": skipping"); next
+      }
+      message("  Year ", yr)
+      res_off <- compute_year_threshold_stats_simple(rda_off, min_threshold = thr, mu_min = mu_min, rel_uncert_method = "B_median")
+      res_on  <- compute_year_threshold_stats_simple(rda_on,  min_threshold = thr, mu_min = mu_min, rel_uncert_method = "B_median")
+
+      if (is.null(variance_ref_list)) variance_ref_list <- res_off$variance_ref_list
+
+      abd_ann <- abs(res_off$annual$accum_mu - res_on$annual$accum_mu)
+
+      if (is.null(acc_annual)) {
+        acc_annual <- acc_init(abd_ann)
+        acc_season <- setNames(vector("list", length(names(res_off$seasonal))), names(res_off$seasonal))
+        for (s in names(res_off$seasonal))
+          acc_season[[s]] <- acc_init(abs(res_off$seasonal[[s]]$accum_mu - res_on$seasonal[[s]]$accum_mu))
+      } else {
+        acc_annual <- acc_add(acc_annual, abd_ann)
+        for (s in names(acc_season))
+          acc_season[[s]] <- acc_add(acc_season[[s]], abs(res_off$seasonal[[s]]$accum_mu - res_on$seasonal[[s]]$accum_mu))
+      }
+    }
+
+    if (is.null(acc_annual)) { warning("No valid years for threshold ", thr); next }
+
+    out[[as.character(thr)]] <- list(
+      threshold         = thr,
+      years             = years,
+      annual_mad_accum  = acc_mean(acc_annual),
+      seasonal_mad_accum = lapply(acc_season, acc_mean),
+      variance_ref_list = variance_ref_list
+    )
+  }
+  out
+}
+
+#### For plotting ####
+
 # get_common_color_scale, plot_interannual_sd_products → moved to R/plot_utils.r
 
 # --------------------------
@@ -664,93 +740,7 @@ nearest_grid <- function(rda_file, station_coords, mu_min = 0.1) {
   y_vec   <- xy$y
 
   time_vec <- if (exists("timestamps")) {
-    as.POSIXct(timestamps, origin = "1970-01-01", tz = "UTC")
-  } else {
-    seq_along(kriging_crop_list)
-  }
-
-  n_stations <- nrow(station_coords)
-  results    <- vector("list", n_stations)
-
-  for (i in seq_len(n_stations)) {
-    target_x <- station_coords[i, 1]
-    target_y <- station_coords[i, 2]
-
-    ix <- which.min(abs(x_vec - target_x))
-    iy <- which.min(abs(y_vec - target_y))
-
-    nearest_x <- x_vec[ix]
-    nearest_y <- y_vec[iy]
-    dist      <- sqrt((nearest_x - target_x)^2 + (nearest_y - target_y)^2)
-
-    mu_raw  <- sapply(kriging_crop_list,  function(m) m[ix, iy])
-    var_raw <- sapply(variance_crop_list, function(v) v[ix, iy])
-
-    mu_thr <- mu_raw
-    mu_thr[mu_thr < mu_min] <- NA_real_
-
-    iqr_vals <- compute_iqr_list(mu_thr, var_raw)
-
-    results[[i]] <- data.table::data.table(
-      station_id = i,
-      x_station  = target_x,
-      y_station  = target_y,
-      x_grid     = nearest_x,
-      y_grid     = nearest_y,
-      dist       = dist,
-      time       = time_vec,
-      mu         = mu_thr,
-      iqr        = as.numeric(unlist(iqr_vals))
-    )
-
-    if (i %% 50 == 0) cat(sprintf("Progress: %d / %d stations\n", i, n_stations))
-  }
-
-  cat("Combining results...\n")
-  t1     <- Sys.time()
-  out_dt <- data.table::rbindlist(results)
-  t2     <- Sys.time()
-  cat(sprintf("Done. Rows: %d  Cols: %d  Time: %.1f sec\n",
-              nrow(out_dt), ncol(out_dt), as.numeric(t2 - t1)))
-  out_dt
-}
-
-# --------------------------
-# Grid coordinate extraction
-# --------------------------
-get_xy_from_matrix <- function(mat) {
-  x <- attr(mat, "x")
-  y <- attr(mat, "y")
-
-  if (is.null(x) && !is.null(colnames(mat)))
-    suppressWarnings(x <- as.numeric(colnames(mat)))
-  if (is.null(y) && !is.null(rownames(mat)))
-    suppressWarnings(y <- as.numeric(rownames(mat)))
-
-  if (is.null(x) || is.null(y))
-    stop("Could not find x/y coordinates in matrix attributes or dimnames.")
-
-  list(x = x, y = y)
-}
-
-# --------------------------
-# Nearest-grid extraction per station
-# --------------------------
-nearest_grid <- function(rda_file, station_coords, mu_min = 0.1) {
-  if (!requireNamespace("data.table", quietly = TRUE))
-    stop("nearest_grid requires the data.table package")
-
-  load(rda_file)
-
-  if (!exists("kriging_crop_list"))  stop("kriging_crop_list not found in rda_file")
-  if (!exists("variance_crop_list")) stop("variance_crop_list not found in rda_file")
-
-  xy      <- get_xy_from_matrix(kriging_crop_list[[1]])
-  x_vec   <- xy$x
-  y_vec   <- xy$y
-
-  time_vec <- if (exists("timestamps")) {
-    as.POSIXct(timestamps, origin = "1970-01-01", tz = "UTC")
+    as.POSIXct(as.numeric(timestamps), origin = "1970-01-01", tz = "UTC")
   } else {
     seq_along(kriging_crop_list)
   }

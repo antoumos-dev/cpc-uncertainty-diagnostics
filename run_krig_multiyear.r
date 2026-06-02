@@ -53,7 +53,7 @@ if (any(!is.finite(thresholds)))
 out_dir <- if (length(args) >= 4) {
   args[4]
 } else {
-  sprintf("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/out_plots/interannual_%d_%d/",
+  sprintf("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/out_plots/diff_figures/10_year_mean_%d_%d/",
           start_year, end_year)
 }
 
@@ -65,12 +65,25 @@ message("Output dir: ", normalizePath(out_dir, mustWork = FALSE))
 
 
 # Load helper functions
+lib_root     <- "/store_new/mch/msclim/antoumos/R/lib"
+.libPaths(lib_root)
 source("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/R/utils.r")
+source("/store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/R/plot_utils.r")
+
+suppressPackageStartupMessages({ library(matrixStats); library(abind) })
 
 res_all <- compute_interannual_stats(
   years = years,
   thresholds = thresholds
 )
+
+res_all_off <- compute_interannual_stats(
+  years       = years,
+  thresholds  = thresholds,
+  rda_pattern = "/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/precip_transformed_results_conv_off_new_%s.rda"
+)
+
+# res_mad <- compute_interannual_mad_accum(years = years, thresholds = thresholds)
 
 #for (thr in names(res_all)) {
 # plot_interannual_products(res_all[[thr]], out_dir)
@@ -329,16 +342,43 @@ plot_cropped_field(
 #out_dir <- file.path("out_plots", sprintf("interannual_%d_%d", min(years), max(years)))
 #dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
+# ── Multi-year mean difference: conv_off − conv_on ────────────────────────────
+plot_mean_diff_products <- function(res_off_thr, res_on_thr, out_dir,
+                                    xlim = c(480, 840), ylim = c(60, 300),
+                                    cap_quant = 0.99) {
+  plot_diff_fields(
+    annual_off        = res_off_thr$interannual_mean,
+    annual_on         = res_on_thr$interannual_mean,
+    seasonal_off      = res_off_thr$interseasonal_mean,
+    seasonal_on       = res_on_thr$interseasonal_mean,
+    variance_ref_list = res_off_thr$variance_ref_list,
+    label             = paste0("2016", "-", "2025"),
+    threshold         = res_off_thr$threshold,
+    out_dir           = out_dir,
+    prefix            = "MEANDIFF",
+    xlim = xlim, ylim = ylim,
+    cap_quant = cap_quant
+  )
+}
+
 message("Start plotting")
 
 #### could move plotting function into plotting utils later
 
 for (thr in names(res_all)) {
 
-  plot_interannual_products(
-    res_all[[thr]],
-    out_dir = file.path(out_dir, paste0("thr_", gsub("\\.", "p", thr)))
-  )
+  if (thr %in% names(res_all_off)) {
+    plot_mean_diff_products(
+      res_off_thr = res_all_off[[thr]],
+      res_on_thr  = res_all[[thr]],
+      out_dir     = file.path(out_dir, paste0("meandiff_thr_", gsub("\\.", "p", thr)))
+    )
+  }
+
+  # plot_mad_accum_products(
+  #   res_mad_thr = res_mad[[thr]],
+  #   out_dir     = file.path(out_dir, paste0("mad_thr_", gsub("\\.", "p", thr)))
+  # )
 
 }
 
