@@ -2,6 +2,35 @@
 
 Quantification of geostatistical uncertainty in the operational CombiPrecip (CPC) precipitation estimation algorithm over Switzerland.
 Uncertainty arises from the kriging process used to merge radar and rain-gauge observations, and is analysed across precipitation intensity bins, years, and under convection-control-on vs. convection-control-off experimental conditions.
+
+## Project structure
+
+```
+out_stats/
+├── R/
+│   ├── utils.r            # shared helper functions
+│   └── plot_utils.r       # shared plotting functions
+├── conv_control.r          # main analysis: conv-on vs conv-off comparison
+├── cross_val_data.r        # cross-validation of precipitation estimates
+├── run_krig_year.r         # kriging stats and plots for a single year
+├── run_krig_year.sh        # SLURM job array wrapper for run_krig_year.r
+├── run_krig_multiyear.r    # multi-year aggregation
+├── run_krig_multiyear.sh   # SLURM wrapper for multi-year run
+├── Intesity_bins.r         # intensity-bin frequency analysis
+├── out_plots/              # generated figures (per year and interannual)
+├── logs/                   # SLURM job logs
+└── *.rds / *.rda           # intermediate result files
+```
+
+## Data inputs
+
+| Path | Content |
+|------|---------|
+| `/store_new/mch/msclim/antoumos/R/develop/CPC/data_new_project/` | Conv-on `.rda` files (`CPC<YY>*.rda`) |
+| `.../data_new_project/conv_control_off/` | Conv-off `.rda` files |
+| `precip_transformed_results_new_<year>.rda` | Kriging input (conv-on) |
+| `precip_transformed_results_conv_off_new_<year>.rda` | Kriging input (conv-off) |
+
 ## Scripts
 
 ### `run_krig_year.r`
@@ -45,3 +74,15 @@ Computes frequency distributions across precipitation intensity bins.
 Figures are written to `out_plots/`:
 - `year_<year>/` — per-year kriging maps and uncertainty plots
 - `interannual_*/` — multi-year summary plots
+
+## Environment
+
+Scripts require the MCH CATs R environment. Load via:
+
+```bash
+source /users/antoumos/.local/bin/activate-uenv
+uenv start --view=climana climana/24.10:rc1
+module load r gdal geos hdf5 cats proj sqlite udunits
+```
+
+R library paths: `/store_new/mch/msclim/share/CATs/cats/lib-R4.4.0/` and `/store_new/mch/msclim/sideris/R/lib/`.

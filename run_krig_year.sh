@@ -5,6 +5,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=12:00:00
+#SBATCH --array=0-0
 
 # Activate the user environment
 #bash
@@ -32,15 +33,18 @@ export TEXMFHOME=/store_new/mch/msclim/share/CATs/TinyTex
 export PATH=/store_new/mch/msclim/share/CATs/TinyTex/bin/x86_64-linux/:${PATH}
 export PATH=./:${PATH}
 
-set -euo pipefail
+#set -euo pipefail
 mkdir -p logs
 
-# Years
-START_YEAR=2021
-END_YEAR=2024
+#cd /store_new/mch/msclim/antoumos/R/develop/CPC/new_project/
 
-# Thresholds
+# List of years corresponding to array indices
+YEARS=(2019)
+YEAR=${YEARS[$SLURM_ARRAY_TASK_ID]}
 
-THRESHOLD="0.1"
+#MODE="relunc"
+#MU_MIN="0.1"
 
-srun Rscript run_krig_multiyear.r "$START_YEAR" "$END_YEAR" "$THRESHOLD" 
+echo "Running year: $YEAR (task $SLURM_ARRAY_TASK_ID)"
+
+srun Rscript run_krig_year.r "$YEAR"
