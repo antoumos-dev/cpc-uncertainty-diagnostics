@@ -22,5 +22,5 @@ export PATH=/store_new/mch/msclim/share/CATs/TinyTex/bin/x86_64-linux/:${PATH}
 
 YEAR=${1:-25}
 
-cd /store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats
+cd /store_new/mch/msclim/antoumos/R/develop/CPC/new_project/out_stats/conv_control
 srun Rscript conv_control.r "$YEAR"

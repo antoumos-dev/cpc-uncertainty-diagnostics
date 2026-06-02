@@ -8,18 +8,27 @@ Uncertainty arises from the kriging process used to merge radar and rain-gauge o
 ```
 out_stats/
 ├── R/
-│   ├── utils.r            # shared helper functions
-│   └── plot_utils.r       # shared plotting functions
-├── conv_control.r          # main analysis: conv-on vs conv-off comparison
-├── cross_val_data.r        # cross-validation of precipitation estimates
-├── run_krig_year.r         # kriging stats and plots for a single year
-├── run_krig_year.sh        # SLURM job array wrapper for run_krig_year.r
-├── run_krig_multiyear.r    # multi-year aggregation
-├── run_krig_multiyear.sh   # SLURM wrapper for multi-year run
-├── Intesity_bins.r         # intensity-bin frequency analysis
-├── out_plots/              # generated figures (per year and interannual)
-├── logs/                   # SLURM job logs
-└── *.rds / *.rda           # intermediate result files
+│   ├── utils.r                        # shared helper functions
+│   └── plot_utils.r                   # shared plotting functions
+├── kriging/
+│   ├── run_krig_year.r                # kriging stats and plots for a single year
+│   ├── run_krig_year.sh               # SLURM wrapper for run_krig_year.r
+│   ├── run_krig_multiyear.r           # multi-year aggregation
+│   └── run_krig_multiyear.sh          # SLURM wrapper for multi-year run
+├── cross_val/
+│   ├── build_cross_val.r              # build cross-validation datasets
+│   └── cross_val_data.r               # cross-validation analysis
+├── conv_control/
+│   ├── conv_control.r                 # conv-on vs conv-off comparison
+│   ├── conv_control.sh                # SLURM wrapper for conv_control.r
+│   ├── conv_control_stats.r           # convection control statistics
+│   └── conv_control_stats_multiyear.r # multi-year convection control stats
+├── diagnostics/
+│   ├── intensity_bins.r               # intensity-bin frequency analysis
+│   └── spatial_bias_map.r             # spatial bias mapping
+├── out_plots/                         # generated figures (per year and interannual)
+├── logs/                              # SLURM job logs
+└── data/                              # intermediate result files
 ```
 
 ## Data inputs
