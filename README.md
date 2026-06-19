@@ -85,12 +85,5 @@ Figures are written to `out_plots/`:
 
 ## Environment
 
-Scripts require the MCH CATs R environment. Load via:
 
-```bash
-source /users/antoumos/.local/bin/activate-uenv
-uenv start --view=climana climana/24.10:rc1
-module load r gdal geos hdf5 cats proj sqlite udunits
-```
 
-R library paths: `/store_new/mch/msclim/share/CATs/cats/lib-R4.4.0/` and `/store_new/mch/msclim/sideris/R/lib/`.
